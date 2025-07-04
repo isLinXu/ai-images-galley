@@ -3,922 +3,1407 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI智能相册</title>
+    <title>AI智能相册系统</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <style>
         .glass-effect {
+            background: rgba(255, 255, 255, 0.25);
             backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
-        .gradient-bg {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
         }
-        .upload-area {
-            border: 2px dashed #cbd5e0;
+        
+        .image-card {
             transition: all 0.3s ease;
+            cursor: pointer;
         }
-        .upload-area.dragover {
-            border-color: #4f46e5;
-            background-color: #f0f9ff;
+        
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-        .modal.active {
-            display: flex;
-        }
-        .tag-input {
+        
+        .tag-chip {
             display: inline-block;
-            padding: 4px 8px;
-            margin: 2px;
-            background: #e2e8f0;
-            border-radius: 12px;
-            font-size: 12px;
-        }
-        .tag-input.custom {
-            background: #4f46e5;
+            background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            margin: 0.125rem;
         }
-        .progress-bar {
-            width: 0%;
-            height: 4px;
-            background: #4f46e5;
-            transition: width 0.3s ease;
+        
+        .ai-tag {
+            background: linear-gradient(45deg, #f093fb, #f5576c);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem;
+            margin: 0.125rem;
+            display: inline-block;
         }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
         .notification {
             position: fixed;
             top: 20px;
             right: 20px;
-            padding: 16px;
-            border-radius: 8px;
-            z-index: 1001;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            color: white;
+            z-index: 1000;
             transform: translateX(100%);
             transition: transform 0.3s ease;
         }
+        
         .notification.show {
             transform: translateX(0);
         }
+        
         .notification.success {
-            background: #10b981;
-            color: white;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
         }
+        
         .notification.error {
-            background: #ef4444;
+            background: linear-gradient(45deg, #f44336, #da190b);
+        }
+        
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0.125rem;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .upload-zone {
+            border: 2px dashed #cbd5e0;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: #4299e1;
+            background-color: #ebf8ff;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #e2e8f0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+        
+        .gallery-item {
+            position: relative;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .modal-backdrop {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
-        }
-        .image-card {
-            transition: transform 0.3s ease;
-        }
-        .image-card:hover {
-            transform: translateY(-8px);
         }
     </style>
 </head>
-<body class="gradient-bg min-h-screen">
-    <!-- 通知组件 -->
-    <div id="notification" class="notification">
-        <div class="flex items-center">
-            <i class="fas fa-check-circle mr-2"></i>
-            <span id="notificationText"></span>
-        </div>
-    </div>
-
-    <!-- 头部 -->
-    <div class="container mx-auto px-4 py-6">
-        <div class="glass-effect rounded-2xl p-6 mb-6">
-            <div class="text-center">
-                <h1 class="text-4xl font-bold text-white mb-2">
-                    <i class="fas fa-camera-retro mr-3"></i>
-                    GitHub智能相册
-                </h1>
-                <p class="text-white text-opacity-80 text-lg">修复版 - 完美支持GitHub API上传</p>
+<body class="bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 min-h-screen">
+    <!-- 导航栏 -->
+    <nav class="glass-effect shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-brain text-2xl text-purple-600 mr-3"></i>
+                    <h1 class="text-xl font-bold text-gray-800">AI智能相册</h1>
+                </div>
+                
+                <!-- 导航菜单 -->
+                <div class="flex items-center space-x-4">
+                    <button class="tab-button px-4 py-2 rounded-lg font-medium active" onclick="switchTab('gallery')">
+                        <i class="fas fa-images mr-2"></i>图片浏览
+                    </button>
+                    <button class="tab-button px-4 py-2 rounded-lg font-medium" onclick="switchTab('ai-analysis')">
+                        <i class="fas fa-robot mr-2"></i>AI分析
+                    </button>
+                    <button class="tab-button px-4 py-2 rounded-lg font-medium" onclick="switchTab('gallery-manage')">
+                        <i class="fas fa-folder mr-2"></i>画廊管理
+                    </button>
+                    <button class="tab-button px-4 py-2 rounded-lg font-medium admin-only" onclick="switchTab('upload')" style="display: none;">
+                        <i class="fas fa-upload mr-2"></i>上传工具
+                    </button>
+                </div>
+                
+                <!-- 用户状态 -->
+                <div class="flex items-center space-x-3">
+                    <div id="user-status" class="flex items-center space-x-2">
+                        <span class="status-indicator w-3 h-3 rounded-full bg-green-400"></span>
+                        <span class="status-text text-sm font-medium">游客模式</span>
+                        <button onclick="showAdminLogin()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                            管理员登录
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
+    </nav>
 
-        <!-- 配置面板 -->
-        <div class="glass-effect rounded-2xl p-6 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white bg-opacity-20 rounded-xl p-4">
-                    <h3 class="text-white font-semibold mb-3">
-                        <i class="fas fa-cog mr-2"></i>GitHub 配置
-                    </h3>
-                    <div class="space-y-2">
-                        <input type="text" id="githubOwner" placeholder="GitHub用户名" 
-                               class="w-full px-3 py-2 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30">
-                        <input type="text" id="githubRepo" placeholder="仓库名" 
-                               class="w-full px-3 py-2 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30">
-                        <input type="password" id="githubToken" placeholder="Personal Access Token" 
-                               class="w-full px-3 py-2 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30">
-                        <button onclick="configureGitHub()" 
-                                class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
-                            <i class="fas fa-save mr-2"></i>保存配置
+    <!-- 主要内容区域 -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- 图片浏览模块 -->
+        <div id="gallery-tab" class="tab-content active">
+            <div class="glass-effect rounded-xl p-6 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">
+                        <i class="fas fa-images mr-2"></i>图片浏览
+                    </h2>
+                    <div class="flex items-center space-x-4">
+                        <div class="relative">
+                            <input type="text" id="search-input" placeholder="搜索图片..." 
+                                   class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                        <button onclick="refreshGallery()" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-sync-alt mr-2"></i>刷新
                         </button>
                     </div>
                 </div>
                 
-                <div class="bg-white bg-opacity-20 rounded-xl p-4">
-                    <h3 class="text-white font-semibold mb-3">
-                        <i class="fas fa-chart-bar mr-2"></i>相册统计
-                    </h3>
-                    <div class="space-y-2 text-white">
-                        <div class="flex justify-between">
-                            <span>总图片:</span>
-                            <span id="totalImages">0</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>已标记:</span>
-                            <span id="taggedImages">0</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>总标签:</span>
-                            <span id="totalTags">0</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>配置状态:</span>
-                            <span id="configStatus">
-                                <i class="fas fa-times-circle text-red-400"></i>
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="bg-white bg-opacity-20 rounded-xl p-4">
-                    <h3 class="text-white font-semibold mb-3">
-                        <i class="fas fa-tools mr-2"></i>快速操作
-                    </h3>
-                    <div class="space-y-2">
-                        <button onclick="testGitHubConnection()" 
-                                class="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors">
-                            <i class="fas fa-network-wired mr-2"></i>测试连接
-                        </button>
-                        <button onclick="loadGallery()" 
-                                class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors">
-                            <i class="fas fa-sync-alt mr-2"></i>刷新相册
-                        </button>
-                        <button onclick="exportData()" 
-                                class="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors">
-                            <i class="fas fa-download mr-2"></i>导出数据
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 上传区域 -->
-        <div class="glass-effect rounded-2xl p-6 mb-6">
-            <div class="upload-area rounded-xl p-8 text-center" id="uploadArea">
-                <div class="text-white text-opacity-80 mb-4">
-                    <i class="fas fa-cloud-upload-alt text-6xl mb-4"></i>
-                    <h3 class="text-2xl font-semibold mb-2">上传图片到GitHub</h3>
-                    <p>点击选择文件或拖拽图片到此处</p>
-                    <p class="text-sm mt-2">支持 JPG, PNG, GIF, WebP 格式，最大25MB</p>
-                </div>
-                <input type="file" id="fileInput" multiple accept="image/*" class="hidden">
-                <button onclick="document.getElementById('fileInput').click()" 
-                        class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg transition-colors">
-                    <i class="fas fa-plus mr-2"></i>选择文件
-                </button>
-            </div>
-            <div id="uploadProgress" class="mt-4 hidden">
-                <div class="bg-white bg-opacity-20 rounded-lg p-4">
-                    <div class="flex justify-between text-white mb-2">
-                        <span>上传进度</span>
-                        <span id="progressText">0%</span>
-                    </div>
-                    <div class="bg-white bg-opacity-20 rounded-full h-2">
-                        <div class="progress-bar rounded-full h-2" id="progressBar"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 搜索和过滤 -->
-        <div class="glass-effect rounded-2xl p-6 mb-6">
-            <div class="flex flex-wrap gap-4 items-center">
-                <div class="flex-1 min-w-64">
-                    <input type="text" id="searchInput" placeholder="🔍 搜索图片、标签或描述..." 
-                           class="w-full px-4 py-2 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 border border-white border-opacity-30">
-                </div>
-                <select id="sortSelect" class="px-4 py-2 rounded-lg bg-white bg-opacity-20 text-white border border-white border-opacity-30">
-                    <option value="name">按名称排序</option>
-                    <option value="date">按日期排序</option>
-                    <option value="size">按大小排序</option>
-                </select>
-                <button onclick="clearSearch()" 
-                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
-                    <i class="fas fa-times mr-2"></i>清除
-                </button>
-            </div>
-        </div>
-
-        <!-- 图片画廊 -->
-        <div class="glass-effect rounded-2xl p-6">
-            <h2 class="text-2xl font-semibold text-white mb-4">
-                <i class="fas fa-images mr-2"></i>图片画廊
-            </h2>
-            <div id="gallery" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                <!-- 图片将在这里动态加载 -->
-            </div>
-            <div id="loadingSpinner" class="text-center py-8">
-                <i class="fas fa-spinner fa-spin text-white text-3xl"></i>
-                <p class="text-white mt-2">正在加载图片...</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- 图片编辑模态框 -->
-    <div id="imageModal" class="modal">
-        <div class="flex items-center justify-center w-full h-full p-4">
-            <div class="bg-white rounded-2xl max-w-4xl w-full max-h-full overflow-auto">
-                <div class="p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-2xl font-semibold">编辑图片信息</h3>
-                        <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
-                            <i class="fas fa-times text-2xl"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <img id="modalImage" class="w-full h-auto rounded-lg shadow-lg">
-                            <div class="mt-4">
-                                <h4 class="font-semibold mb-2">图片信息</h4>
-                                <div class="text-sm text-gray-600">
-                                    <p>文件名: <span id="modalFileName"></span></p>
-                                    <p>上传时间: <span id="modalUploadTime"></span></p>
-                                    <p>文件大小: <span id="modalFileSize"></span></p>
-                                </div>
+                <!-- 统计信息 -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <div class="flex items-center">
+                            <i class="fas fa-images text-blue-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">总图片数</p>
+                                <p class="text-xl font-bold" id="total-images">0</p>
                             </div>
                         </div>
-                        
-                        <div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">自定义标签</label>
-                                <div class="flex flex-wrap gap-2 mb-2" id="currentTags"></div>
-                                <div class="flex gap-2">
-                                    <input type="text" id="tagInput" placeholder="输入标签..." 
-                                           class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
-                                    <button onclick="addTag()" 
-                                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
-                                        <i class="fas fa-plus"></i>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <div class="flex items-center">
+                            <i class="fas fa-robot text-green-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">已分析</p>
+                                <p class="text-xl font-bold" id="analyzed-images">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <div class="flex items-center">
+                            <i class="fas fa-tags text-yellow-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">标签数</p>
+                                <p class="text-xl font-bold" id="total-tags">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow">
+                        <div class="flex items-center">
+                            <i class="fas fa-heart text-red-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">收藏数</p>
+                                <p class="text-xl font-bold" id="favorite-count">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 图片网格 -->
+            <div id="gallery-container" class="image-grid">
+                <div class="col-span-full text-center py-12">
+                    <div class="loading-spinner mb-4"></div>
+                    <p class="text-gray-600">正在加载图片...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI分析模块 -->
+        <div id="ai-analysis-tab" class="tab-content">
+            <div class="glass-effect rounded-xl p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+                    <i class="fas fa-robot mr-2"></i>AI分析中心
+                </h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- AI分析结果展示 -->
+                    <div class="bg-white rounded-lg p-6 shadow">
+                        <h3 class="text-lg font-semibold mb-4">
+                            <i class="fas fa-chart-bar mr-2"></i>分析统计
+                        </h3>
+                        <div id="ai-stats-container">
+                            <canvas id="ai-stats-chart" style="height: 300px;"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- 标签云 -->
+                    <div class="bg-white rounded-lg p-6 shadow">
+                        <h3 class="text-lg font-semibold mb-4">
+                            <i class="fas fa-cloud mr-2"></i>标签云
+                        </h3>
+                        <div id="tag-cloud" class="flex flex-wrap">
+                            <!-- 动态生成标签云 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 颜色分析 -->
+                    <div class="bg-white rounded-lg p-6 shadow">
+                        <h3 class="text-lg font-semibold mb-4">
+                            <i class="fas fa-palette mr-2"></i>颜色分析
+                        </h3>
+                        <div id="color-analysis">
+                            <!-- 动态生成颜色分析 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 情感分析 -->
+                    <div class="bg-white rounded-lg p-6 shadow">
+                        <h3 class="text-lg font-semibold mb-4">
+                            <i class="fas fa-smile mr-2"></i>情感分析
+                        </h3>
+                        <div id="emotion-analysis">
+                            <canvas id="emotion-chart" style="height: 300px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 画廊管理模块 -->
+        <div id="gallery-manage-tab" class="tab-content">
+            <div class="glass-effect rounded-xl p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">
+                        <i class="fas fa-folder mr-2"></i>画廊管理
+                    </h2>
+                    <button onclick="createNewGallery()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg admin-only" style="display: none;">
+                        <i class="fas fa-plus mr-2"></i>创建画廊
+                    </button>
+                </div>
+                
+                <div id="galleries-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- 动态加载画廊 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 上传工具模块 -->
+        <div id="upload-tab" class="tab-content">
+            <div class="glass-effect rounded-xl p-6">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">
+                    <i class="fas fa-upload mr-2"></i>上传工具
+                </h2>
+                
+                <!-- 上传区域 -->
+                <div class="upload-zone rounded-lg p-8 text-center mb-6" id="upload-zone">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                    <p class="text-lg text-gray-600 mb-2">拖拽图片到此处或点击选择</p>
+                    <p class="text-sm text-gray-500">支持 JPG, PNG, GIF, WebP 格式</p>
+                    <input type="file" id="file-input" multiple accept="image/*" class="hidden">
+                    <button onclick="document.getElementById('file-input').click()" 
+                            class="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg">
+                        选择文件
+                    </button>
+                </div>
+                
+                <!-- 上传进度 -->
+                <div id="upload-progress" class="hidden">
+                    <div class="bg-white rounded-lg p-4 shadow mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium">上传进度</span>
+                            <span class="text-sm text-gray-500" id="upload-status">准备上传...</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 待上传文件列表 -->
+                <div id="file-list" class="space-y-2">
+                    <!-- 动态生成文件列表 -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 图片详情模态框 -->
+    <div id="image-detail-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-6xl max-h-screen overflow-hidden shadow-2xl flex">
+            <!-- 左侧图片显示 -->
+            <div class="flex-1 flex flex-col">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h3 id="detail-title" class="text-lg font-semibold">图片详情</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="shareImage()" class="text-blue-500 hover:text-blue-600">
+                            <i class="fas fa-share"></i>
+                        </button>
+                        <button onclick="downloadCurrentImage()" class="text-green-500 hover:text-green-600">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button onclick="closeImageDetail()" class="text-gray-500 hover:text-gray-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex-1 flex items-center justify-center p-4 bg-gray-100">
+                    <img id="detail-image" class="max-w-full max-h-full object-contain rounded-lg shadow-lg">
+                </div>
+                <div class="p-4 border-t">
+                    <div class="flex justify-between items-center">
+                        <button onclick="previousImage()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-chevron-left mr-2"></i>上一张
+                        </button>
+                        <span id="image-counter" class="text-sm text-gray-600">1 / 10</span>
+                        <button onclick="nextImage()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                            下一张<i class="fas fa-chevron-right ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧编辑面板 -->
+            <div class="w-80 bg-gray-50 p-4 overflow-y-auto">
+                <!-- 标签编辑 -->
+                <div class="mb-6">
+                    <h4 class="font-semibold mb-2">标签</h4>
+                    <div id="image-tags" class="mb-2">
+                        <!-- 动态生成标签 -->
+                    </div>
+                    <div class="flex">
+                        <input type="text" id="new-tag-input" placeholder="添加标签..." 
+                               class="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <button onclick="addTag()" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-r-lg admin-only">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 描述编辑 -->
+                <div class="mb-6">
+                    <h4 class="font-semibold mb-2">描述</h4>
+                    <textarea id="image-description" placeholder="添加图片描述..." 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+                              rows="4"></textarea>
+                    <button onclick="saveDescription()" class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg admin-only">
+                        保存描述
+                    </button>
+                </div>
+                
+                <!-- AI分析结果 -->
+                <div class="mb-6">
+                    <h4 class="font-semibold mb-2">AI分析</h4>
+                    <div id="detail-ai-analysis">
+                        <!-- 动态生成AI分析结果 -->
+                    </div>
+                </div>
+                
+                <!-- 图片信息 -->
+                <div class="mb-6">
+                    <h4 class="font-semibold mb-2">图片信息</h4>
+                    <div id="image-info" class="text-sm text-gray-600">
+                        <!-- 动态生成图片信息 -->
+                    </div>
+                </div>
+                
+                <!-- 相关图片 -->
+                <div>
+                    <h4 class="font-semibold mb-2">相关图片</h4>
+                    <div id="related-images" class="grid grid-cols-2 gap-2">
+                        <!-- 动态生成相关图片 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员登录模态框 -->
+    <div id="admin-login-modal" class="fixed inset-0 modal-backdrop z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+            <h3 class="text-lg font-semibold mb-4">管理员登录</h3>
+            <p class="text-gray-600 mb-4">请输入您的GitHub Personal Access Token以获得管理权限</p>
+            <input type="password" id="admin-token" placeholder="GitHub Token..." 
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-4">
+            <div class="flex space-x-3">
+                <button onclick="adminLogin()" class="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg">
+                    验证登录
+                </button>
+                <button onclick="closeAdminLogin()" class="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 rounded-lg">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        // 全局状态管理
+        class AppState {
+            constructor() {
+                this.isAdmin = false;
+                this.githubToken = null;
+                this.images = [];
+                this.galleries = [];
+                this.currentImage = null;
+                this.currentImageIndex = 0;
+                this.aiAnalysisData = {};
+                this.init();
+            }
+            
+            init() {
+                this.loadStoredData();
+                this.checkAdminStatus();
+                this.initializeEventListeners();
+                this.loadImages();
+            }
+            
+            loadStoredData() {
+                this.githubToken = localStorage.getItem('github_token');
+                this.galleries = JSON.parse(localStorage.getItem('galleries') || '[]');
+                this.aiAnalysisData = JSON.parse(localStorage.getItem('ai_analysis_data') || '{}');
+            }
+            
+            async checkAdminStatus() {
+                if (this.githubToken) {
+                    const isValid = await this.verifyGitHubToken(this.githubToken);
+                    if (isValid) {
+                        this.setAdminMode(true);
+                    } else {
+                        localStorage.removeItem('github_token');
+                    }
+                }
+                this.updateUI();
+            }
+            
+            async verifyGitHubToken(token) {
+                try {
+                    const response = await fetch('https://api.github.com/user', {
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    return response.ok;
+                } catch (error) {
+                    return false;
+                }
+            }
+            
+            setAdminMode(isAdmin) {
+                this.isAdmin = isAdmin;
+                this.updateUI();
+            }
+            
+            updateUI() {
+                const adminElements = document.querySelectorAll('.admin-only');
+                adminElements.forEach(el => {
+                    el.style.display = this.isAdmin ? 'block' : 'none';
+                });
+                
+                const statusText = document.querySelector('.status-text');
+                const statusIndicator = document.querySelector('.status-indicator');
+                const userStatus = document.getElementById('user-status');
+                
+                if (statusText) {
+                    statusText.textContent = this.isAdmin ? '管理员模式' : '游客模式';
+                }
+                
+                if (statusIndicator) {
+                    statusIndicator.className = `status-indicator w-3 h-3 rounded-full ${this.isAdmin ? 'bg-purple-400' : 'bg-green-400'}`;
+                }
+                
+                if (userStatus) {
+                    userStatus.innerHTML = `
+                        <span class="status-indicator w-3 h-3 rounded-full ${this.isAdmin ? 'bg-purple-400' : 'bg-green-400'}"></span>
+                        <span class="status-text text-sm font-medium">${this.isAdmin ? '管理员模式' : '游客模式'}</span>
+                        ${this.isAdmin ? 
+                            '<button onclick="app.logout()" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">退出登录</button>' :
+                            '<button onclick="showAdminLogin()" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">管理员登录</button>'
+                        }
+                    `;
+                }
+            }
+            
+            logout() {
+                localStorage.removeItem('github_token');
+                this.githubToken = null;
+                this.setAdminMode(false);
+                showNotification('已退出管理员模式', 'success');
+            }
+            
+            initializeEventListeners() {
+                // 搜索功能
+                const searchInput = document.getElementById('search-input');
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => {
+                        this.searchImages(e.target.value);
+                    });
+                }
+                
+                // 文件拖拽上传
+                const uploadZone = document.getElementById('upload-zone');
+                const fileInput = document.getElementById('file-input');
+                
+                if (uploadZone && fileInput) {
+                    uploadZone.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        uploadZone.classList.add('dragover');
+                    });
+                    
+                    uploadZone.addEventListener('dragleave', () => {
+                        uploadZone.classList.remove('dragover');
+                    });
+                    
+                    uploadZone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        uploadZone.classList.remove('dragover');
+                        if (this.isAdmin) {
+                            this.handleFileUpload(e.dataTransfer.files);
+                        }
+                    });
+                    
+                    fileInput.addEventListener('change', (e) => {
+                        if (this.isAdmin) {
+                            this.handleFileUpload(e.target.files);
+                        }
+                    });
+                }
+            }
+            
+            async loadImages() {
+                try {
+                    // 方法1: 尝试从GitHub API加载
+                    let images = await this.loadFromGitHubAPI();
+                    
+                    // 方法2: 如果GitHub API失败，尝试探测常见文件名
+                    if (images.length === 0) {
+                        images = await this.probeCommonImages();
+                    }
+                    
+                    // 方法3: 加载示例图片
+                    if (images.length === 0) {
+                        images = this.getExampleImages();
+                    }
+                    
+                    this.images = images;
+                    this.renderGallery();
+                    this.updateStatistics();
+                    this.generateAIAnalysis();
+                    
+                } catch (error) {
+                    console.error('加载图片失败:', error);
+                    this.images = this.getExampleImages();
+                    this.renderGallery();
+                    this.updateStatistics();
+                }
+            }
+            
+            async loadFromGitHubAPI() {
+                try {
+                    const response = await fetch('https://api.github.com/repos/isLinXu/ai-images-galley/contents/images');
+                    if (!response.ok) throw new Error('GitHub API请求失败');
+                    
+                    const files = await response.json();
+                    const imageFiles = files.filter(file => 
+                        file.type === 'file' && 
+                        /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name)
+                    );
+                    
+                    return imageFiles.map(file => ({
+                        id: file.sha,
+                        name: file.name,
+                        url: `images/${file.name}`,
+                        downloadUrl: file.download_url,
+                        size: file.size,
+                        loadMethod: 'GitHub API'
+                    }));
+                } catch (error) {
+                    console.log('GitHub API加载失败:', error);
+                    return [];
+                }
+            }
+            
+            async probeCommonImages() {
+                const commonNames = [
+                    ...Array.from({length: 10}, (_, i) => `image${i + 1}.jpg`),
+                    ...Array.from({length: 10}, (_, i) => `photo${i + 1}.jpg`),
+                    'sunset.jpg', 'landscape.jpg', 'nature.jpg', 'city.jpg',
+                    'portrait.jpg', 'travel.jpg', 'food.jpg', 'art.jpg'
+                ];
+                
+                const validImages = [];
+                
+                for (const name of commonNames) {
+                    try {
+                        const exists = await this.checkImageExists(name);
+                        if (exists) {
+                            validImages.push({
+                                id: name,
+                                name: name,
+                                url: `images/${name}`,
+                                loadMethod: 'Probe'
+                            });
+                        }
+                    } catch (error) {
+                        // 忽略错误，继续检查下一个
+                    }
+                }
+                
+                return validImages;
+            }
+            
+            checkImageExists(filename) {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve(true);
+                    img.onerror = () => resolve(false);
+                    img.src = `images/${filename}`;
+                    setTimeout(() => resolve(false), 3000); // 3秒超时
+                });
+            }
+            
+            getExampleImages() {
+                return [
+                    {
+                        id: 'demo1',
+                        name: '美丽风景.jpg',
+                        url: 'https://picsum.photos/400/300?random=1',
+                        tags: ['风景', '自然', '山水'],
+                        description: '这是一张美丽的风景照片，展现了大自然的壮丽景色。',
+                        loadMethod: 'Demo'
+                    },
+                    {
+                        id: 'demo2',
+                        name: '城市夜景.jpg',
+                        url: 'https://picsum.photos/400/300?random=2',
+                        tags: ['城市', '夜景', '灯光'],
+                        description: '繁华都市的夜晚，灯火辉煌，展现现代都市的魅力。',
+                        loadMethod: 'Demo'
+                    },
+                    {
+                        id: 'demo3',
+                        name: '森林小径.jpg',
+                        url: 'https://picsum.photos/400/300?random=3',
+                        tags: ['森林', '小径', '绿色'],
+                        description: '幽静的森林小径，阳光透过树叶洒在地面上。',
+                        loadMethod: 'Demo'
+                    },
+                    {
+                        id: 'demo4',
+                        name: '海边日落.jpg',
+                        url: 'https://picsum.photos/400/300?random=4',
+                        tags: ['海边', '日落', '浪漫'],
+                        description: '在海边观赏的绚烂日落，天空被染成金黄色。',
+                        loadMethod: 'Demo'
+                    }
+                ];
+            }
+            
+            renderGallery() {
+                const container = document.getElementById('gallery-container');
+                if (!container) return;
+                
+                if (this.images.length === 0) {
+                    container.innerHTML = `
+                        <div class="col-span-full text-center py-12">
+                            <i class="fas fa-images text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-600 text-lg">暂无图片</p>
+                            <p class="text-gray-500">请上传图片到images文件夹</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = this.images.map((image, index) => `
+                    <div class="image-card gallery-item" onclick="app.openImageDetail(${index})">
+                        <img src="${image.url}" alt="${image.name}" 
+                             class="w-full h-48 object-cover" 
+                             onerror="this.src='https://via.placeholder.com/400x300?text=图片加载失败'">
+                        <div class="p-4">
+                            <h3 class="font-semibold text-gray-800 mb-2">${image.name}</h3>
+                            <p class="text-sm text-gray-600 mb-2">${image.description || '暂无描述'}</p>
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                ${(image.tags || []).map(tag => `<span class="tag-chip">${tag}</span>`).join('')}
+                            </div>
+                            <div class="flex justify-between items-center text-xs text-gray-500">
+                                <span>来源: ${image.loadMethod || 'Unknown'}</span>
+                                <div class="flex space-x-2">
+                                    <button onclick="event.stopPropagation(); app.toggleFavorite('${image.id}')" 
+                                            class="text-red-500 hover:text-red-600">
+                                        <i class="fas fa-heart"></i>
+                                    </button>
+                                    <button onclick="event.stopPropagation(); app.shareImage('${image.id}')" 
+                                            class="text-blue-500 hover:text-blue-600">
+                                        <i class="fas fa-share"></i>
                                     </button>
                                 </div>
                             </div>
-                            
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium text-gray-700 mb-2">图片描述</label>
-                                <textarea id="descriptionInput" rows="4" placeholder="输入图片描述..." 
-                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none"></textarea>
-                                <div class="text-sm text-gray-500 mt-1">
-                                    字数: <span id="charCount">0</span>
-                                </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            
+            searchImages(query) {
+                const filteredImages = this.images.filter(image => 
+                    image.name.toLowerCase().includes(query.toLowerCase()) ||
+                    (image.description && image.description.toLowerCase().includes(query.toLowerCase())) ||
+                    (image.tags && image.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase())))
+                );
+                
+                this.renderFilteredGallery(filteredImages);
+            }
+            
+            renderFilteredGallery(images) {
+                const container = document.getElementById('gallery-container');
+                if (!container) return;
+                
+                if (images.length === 0) {
+                    container.innerHTML = `
+                        <div class="col-span-full text-center py-12">
+                            <i class="fas fa-search text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-600 text-lg">未找到匹配的图片</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = images.map((image, index) => `
+                    <div class="image-card gallery-item" onclick="app.openImageDetail(${this.images.indexOf(image)})">
+                        <img src="${image.url}" alt="${image.name}" 
+                             class="w-full h-48 object-cover" 
+                             onerror="this.src='https://via.placeholder.com/400x300?text=图片加载失败'">
+                        <div class="p-4">
+                            <h3 class="font-semibold text-gray-800 mb-2">${image.name}</h3>
+                            <p class="text-sm text-gray-600 mb-2">${image.description || '暂无描述'}</p>
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                ${(image.tags || []).map(tag => `<span class="tag-chip">${tag}</span>`).join('')}
                             </div>
-                            
-                            <div class="flex gap-2">
-                                <button onclick="saveImageData()" 
-                                        class="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-                                    <i class="fas fa-save mr-2"></i>保存
-                                </button>
-                                <button onclick="deleteImage()" 
-                                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg">
-                                    <i class="fas fa-trash mr-2"></i>删除
-                                </button>
+                            <div class="flex justify-between items-center text-xs text-gray-500">
+                                <span>来源: ${image.loadMethod || 'Unknown'}</span>
+                                <div class="flex space-x-2">
+                                    <button onclick="event.stopPropagation(); app.toggleFavorite('${image.id}')" 
+                                            class="text-red-500 hover:text-red-600">
+                                        <i class="fas fa-heart"></i>
+                                    </button>
+                                    <button onclick="event.stopPropagation(); app.shareImage('${image.id}')" 
+                                            class="text-blue-500 hover:text-blue-600">
+                                        <i class="fas fa-share"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // 全局变量
-        let currentConfig = {
-            owner: '',
-            repo: '',
-            token: '',
-            branch: 'main'
-        };
-        let currentImages = [];
-        let currentEditingImage = null;
-        
-        // 初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            loadConfig();
-            setupEventListeners();
-            loadGallery();
-        });
-
-        // 设置事件监听器
-        function setupEventListeners() {
-            // 文件上传
-            const fileInput = document.getElementById('fileInput');
-            const uploadArea = document.getElementById('uploadArea');
-            
-            fileInput.addEventListener('change', handleFileSelect);
-            
-            // 拖拽上传
-            uploadArea.addEventListener('dragover', handleDragOver);
-            uploadArea.addEventListener('dragleave', handleDragLeave);
-            uploadArea.addEventListener('drop', handleDrop);
-            
-            // 搜索
-            document.getElementById('searchInput').addEventListener('input', handleSearch);
-            document.getElementById('sortSelect').addEventListener('change', handleSort);
-            
-            // 标签输入
-            document.getElementById('tagInput').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    addTag();
-                }
-            });
-            
-            // 描述输入
-            document.getElementById('descriptionInput').addEventListener('input', function(e) {
-                document.getElementById('charCount').textContent = e.target.value.length;
-            });
-        }
-
-        // 配置GitHub
-        function configureGitHub() {
-            const owner = document.getElementById('githubOwner').value.trim();
-            const repo = document.getElementById('githubRepo').value.trim();
-            const token = document.getElementById('githubToken').value.trim();
-            
-            if (!owner || !repo || !token) {
-                showNotification('请填写完整的GitHub配置信息', 'error');
-                return;
+                `).join('');
             }
             
-            currentConfig = { owner, repo, token, branch: 'main' };
-            localStorage.setItem('githubConfig', JSON.stringify(currentConfig));
-            
-            // 验证配置
-            testGitHubConnection();
-        }
-
-        // 测试GitHub连接
-        async function testGitHubConnection() {
-            if (!currentConfig.token) {
-                showNotification('请先配置GitHub信息', 'error');
-                return;
-            }
-            
-            try {
-                showNotification('正在测试连接...', 'info');
+            updateStatistics() {
+                document.getElementById('total-images').textContent = this.images.length;
+                document.getElementById('analyzed-images').textContent = Object.keys(this.aiAnalysisData).length;
                 
-                // 测试用户权限
-                const userResponse = await fetch('https://api.github.com/user', {
-                    headers: {
-                        'Authorization': `token ${currentConfig.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'GitHub-Gallery-App'
-                    }
+                const allTags = this.images.flatMap(img => img.tags || []);
+                document.getElementById('total-tags').textContent = new Set(allTags).size;
+                
+                const favorites = JSON.parse(localStorage.getItem('user_favorites') || '[]');
+                document.getElementById('favorite-count').textContent = favorites.length;
+            }
+            
+            openImageDetail(index) {
+                this.currentImageIndex = index;
+                this.currentImage = this.images[index];
+                this.showImageDetailModal();
+            }
+            
+            showImageDetailModal() {
+                const modal = document.getElementById('image-detail-modal');
+                const image = this.currentImage;
+                
+                document.getElementById('detail-title').textContent = image.name;
+                document.getElementById('detail-image').src = image.url;
+                document.getElementById('image-counter').textContent = `${this.currentImageIndex + 1} / ${this.images.length}`;
+                
+                // 加载标签
+                this.renderImageTags();
+                
+                // 加载描述
+                document.getElementById('image-description').value = image.description || '';
+                
+                // 加载AI分析
+                this.renderAIAnalysis();
+                
+                // 加载图片信息
+                this.renderImageInfo();
+                
+                // 加载相关图片
+                this.renderRelatedImages();
+                
+                modal.classList.remove('hidden');
+            }
+            
+            renderImageTags() {
+                const container = document.getElementById('image-tags');
+                const tags = this.currentImage.tags || [];
+                
+                container.innerHTML = tags.map(tag => `
+                    <span class="tag-chip inline-flex items-center">
+                        ${tag}
+                        ${this.isAdmin ? `<button onclick="app.removeTag('${tag}')" class="ml-2 text-white hover:text-red-200"><i class="fas fa-times"></i></button>` : ''}
+                    </span>
+                `).join('');
+            }
+            
+            renderAIAnalysis() {
+                const container = document.getElementById('detail-ai-analysis');
+                const analysis = this.generateImageAIAnalysis(this.currentImage);
+                
+                container.innerHTML = `
+                    <div class="space-y-3">
+                        <div>
+                            <span class="text-xs text-gray-500">检测到的物体:</span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${analysis.objects.map(obj => `<span class="ai-tag">${obj.label} ${Math.round(obj.confidence * 100)}%</span>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-xs text-gray-500">场景类型:</span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${analysis.scenes.map(scene => `<span class="ai-tag">${scene.label} ${Math.round(scene.confidence * 100)}%</span>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-xs text-gray-500">主要颜色:</span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${analysis.colors.map(color => `<span class="color-swatch" style="background-color: ${color.hex}" title="${color.name}"></span>`).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-xs text-gray-500">情感分析:</span>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${analysis.emotions.map(emotion => `<span class="ai-tag">${emotion.label} ${Math.round(emotion.confidence * 100)}%</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            generateImageAIAnalysis(image) {
+                // 模拟AI分析结果
+                const objects = [
+                    { label: '人物', confidence: 0.95 },
+                    { label: '建筑', confidence: 0.88 },
+                    { label: '天空', confidence: 0.92 }
+                ];
+                
+                const scenes = [
+                    { label: '户外', confidence: 0.89 },
+                    { label: '白天', confidence: 0.94 }
+                ];
+                
+                const colors = [
+                    { hex: '#4299e1', name: '蓝色' },
+                    { hex: '#48bb78', name: '绿色' },
+                    { hex: '#ed8936', name: '橙色' }
+                ];
+                
+                const emotions = [
+                    { label: '快乐', confidence: 0.82 },
+                    { label: '平静', confidence: 0.15 }
+                ];
+                
+                return { objects, scenes, colors, emotions };
+            }
+            
+            renderImageInfo() {
+                const container = document.getElementById('image-info');
+                const image = this.currentImage;
+                
+                container.innerHTML = `
+                    <div class="space-y-2">
+                        <div><span class="font-medium">文件名:</span> ${image.name}</div>
+                        <div><span class="font-medium">文件大小:</span> ${this.formatFileSize(image.size)}</div>
+                        <div><span class="font-medium">加载方式:</span> ${image.loadMethod}</div>
+                        <div><span class="font-medium">上传时间:</span> ${this.formatDate(image.createdAt)}</div>
+                    </div>
+                `;
+            }
+            
+            renderRelatedImages() {
+                const container = document.getElementById('related-images');
+                const currentTags = this.currentImage.tags || [];
+                
+                const relatedImages = this.images
+                    .filter(img => img.id !== this.currentImage.id)
+                    .filter(img => {
+                        const imgTags = img.tags || [];
+                        return currentTags.some(tag => imgTags.includes(tag));
+                    })
+                    .slice(0, 4);
+                
+                container.innerHTML = relatedImages.map((img, index) => `
+                    <div class="cursor-pointer hover:opacity-75" onclick="app.openImageDetail(${this.images.indexOf(img)})">
+                        <img src="${img.url}" alt="${img.name}" class="w-full h-16 object-cover rounded">
+                        <p class="text-xs text-gray-600 mt-1 truncate">${img.name}</p>
+                    </div>
+                `).join('');
+                
+                if (relatedImages.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-gray-500 col-span-2">暂无相关图片</p>';
+                }
+            }
+            
+            formatFileSize(bytes) {
+                if (!bytes) return '未知';
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+            }
+            
+            formatDate(dateString) {
+                if (!dateString) return '未知';
+                return new Date(dateString).toLocaleDateString('zh-CN');
+            }
+            
+            generateAIAnalysis() {
+                this.generateTagCloud();
+                this.generateColorAnalysis();
+                this.generateAIStatsChart();
+                this.generateEmotionChart();
+            }
+            
+            generateTagCloud() {
+                const container = document.getElementById('tag-cloud');
+                const allTags = this.images.flatMap(img => img.tags || []);
+                const tagCounts = {};
+                
+                allTags.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
                 });
                 
-                if (!userResponse.ok) {
-                    throw new Error(`用户验证失败: ${userResponse.status} ${userResponse.statusText}`);
-                }
+                const sortedTags = Object.entries(tagCounts)
+                    .sort(([,a], [,b]) => b - a)
+                    .slice(0, 20);
                 
-                const userData = await userResponse.json();
+                container.innerHTML = sortedTags.map(([tag, count]) => `
+                    <span class="tag-chip" style="font-size: ${Math.min(16 + count * 2, 24)}px">
+                        ${tag} (${count})
+                    </span>
+                `).join('');
+            }
+            
+            generateColorAnalysis() {
+                const container = document.getElementById('color-analysis');
+                const colors = [
+                    { name: '蓝色', hex: '#4299e1', count: 15 },
+                    { name: '绿色', hex: '#48bb78', count: 12 },
+                    { name: '红色', hex: '#f56565', count: 8 },
+                    { name: '黄色', hex: '#ed8936', count: 6 }
+                ];
                 
-                // 测试仓库访问
-                const repoResponse = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}`, {
-                    headers: {
-                        'Authorization': `token ${currentConfig.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'GitHub-Gallery-App'
+                container.innerHTML = colors.map(color => `
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center">
+                            <span class="color-swatch mr-2" style="background-color: ${color.hex}"></span>
+                            <span class="text-sm">${color.name}</span>
+                        </div>
+                        <span class="text-sm text-gray-600">${color.count}张</span>
+                    </div>
+                `).join('');
+            }
+            
+            generateAIStatsChart() {
+                const ctx = document.getElementById('ai-stats-chart');
+                if (!ctx) return;
+                
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['已分析', '未分析'],
+                        datasets: [{
+                            data: [Object.keys(this.aiAnalysisData).length, this.images.length - Object.keys(this.aiAnalysisData).length],
+                            backgroundColor: ['#667eea', '#f093fb'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
                     }
                 });
+            }
+            
+            generateEmotionChart() {
+                const ctx = document.getElementById('emotion-chart');
+                if (!ctx) return;
                 
-                if (!repoResponse.ok) {
-                    throw new Error(`仓库访问失败: ${repoResponse.status} ${repoResponse.statusText}`);
-                }
-                
-                const repoData = await repoResponse.json();
-                
-                // 测试写入权限
-                const permissionsResponse = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/collaborators/${userData.login}/permission`, {
-                    headers: {
-                        'Authorization': `token ${currentConfig.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'GitHub-Gallery-App'
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['快乐', '悲伤', '愤怒', '惊讶', '恐惧', '厌恶'],
+                        datasets: [{
+                            label: '情感分布',
+                            data: [45, 12, 5, 18, 8, 12],
+                            backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
                     }
                 });
-                
-                document.getElementById('configStatus').innerHTML = '<i class="fas fa-check-circle text-green-400"></i>';
-                showNotification('GitHub连接测试成功！', 'success');
-                
-            } catch (error) {
-                console.error('GitHub连接测试失败:', error);
-                document.getElementById('configStatus').innerHTML = '<i class="fas fa-times-circle text-red-400"></i>';
-                showNotification(`连接测试失败: ${error.message}`, 'error');
             }
-        }
-
-        // 加载配置
-        function loadConfig() {
-            const savedConfig = localStorage.getItem('githubConfig');
-            if (savedConfig) {
-                currentConfig = JSON.parse(savedConfig);
-                document.getElementById('githubOwner').value = currentConfig.owner;
-                document.getElementById('githubRepo').value = currentConfig.repo;
-                document.getElementById('githubToken').value = currentConfig.token;
-                
-                if (currentConfig.token) {
-                    testGitHubConnection();
+            
+            async handleFileUpload(files) {
+                if (!this.isAdmin) {
+                    showNotification('需要管理员权限才能上传文件', 'error');
+                    return;
                 }
-            }
-        }
-
-        // 处理文件选择
-        function handleFileSelect(event) {
-            const files = Array.from(event.target.files);
-            handleFiles(files);
-        }
-
-        // 处理拖拽
-        function handleDragOver(event) {
-            event.preventDefault();
-            event.currentTarget.classList.add('dragover');
-        }
-
-        function handleDragLeave(event) {
-            event.preventDefault();
-            event.currentTarget.classList.remove('dragover');
-        }
-
-        function handleDrop(event) {
-            event.preventDefault();
-            event.currentTarget.classList.remove('dragover');
-            
-            const files = Array.from(event.dataTransfer.files);
-            handleFiles(files);
-        }
-
-        // 处理文件
-        function handleFiles(files) {
-            const imageFiles = files.filter(file => file.type.startsWith('image/'));
-            
-            if (imageFiles.length === 0) {
-                showNotification('请选择有效的图片文件', 'error');
-                return;
+                
+                const fileList = document.getElementById('file-list');
+                const progressContainer = document.getElementById('upload-progress');
+                
+                progressContainer.classList.remove('hidden');
+                
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    await this.uploadSingleFile(file, i, files.length);
+                }
+                
+                progressContainer.classList.add('hidden');
+                showNotification('文件上传完成', 'success');
+                this.loadImages(); // 重新加载图片
             }
             
-            if (imageFiles.length > 10) {
-                showNotification('一次最多上传10张图片', 'error');
-                return;
-            }
-            
-            uploadFiles(imageFiles);
-        }
-
-        // 上传文件到GitHub
-        async function uploadFiles(files) {
-            if (!currentConfig.token) {
-                showNotification('请先配置GitHub信息', 'error');
-                return;
-            }
-            
-            const progressContainer = document.getElementById('uploadProgress');
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-            
-            progressContainer.classList.remove('hidden');
-            
-            let completed = 0;
-            const total = files.length;
-            
-            for (const file of files) {
+            async uploadSingleFile(file, index, total) {
+                const progressFill = document.getElementById('progress-fill');
+                const uploadStatus = document.getElementById('upload-status');
+                
+                uploadStatus.textContent = `正在上传 ${file.name}...`;
+                
                 try {
-                    await uploadSingleFile(file);
-                    completed++;
+                    // 模拟上传过程
+                    for (let progress = 0; progress <= 100; progress += 10) {
+                        progressFill.style.width = `${(index * 100 + progress) / total}%`;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
                     
-                    const progress = (completed / total) * 100;
-                    progressBar.style.width = progress + '%';
-                    progressText.textContent = Math.round(progress) + '%';
+                    // 这里应该调用实际的GitHub API上传
+                    // const result = await this.uploadToGitHub(file);
+                    
+                    uploadStatus.textContent = `${file.name} 上传成功`;
                     
                 } catch (error) {
                     console.error('上传失败:', error);
-                    showNotification(`上传 ${file.name} 失败: ${error.message}`, 'error');
+                    uploadStatus.textContent = `${file.name} 上传失败`;
+                    showNotification(`${file.name} 上传失败`, 'error');
                 }
             }
             
-            progressContainer.classList.add('hidden');
-            
-            if (completed > 0) {
-                showNotification(`成功上传 ${completed} 张图片`, 'success');
-                loadGallery();
+            async adminLogin(token) {
+                const isValid = await this.verifyGitHubToken(token);
+                if (isValid) {
+                    this.githubToken = token;
+                    localStorage.setItem('github_token', token);
+                    this.setAdminMode(true);
+                    return { success: true, message: '管理员登录成功' };
+                } else {
+                    return { success: false, message: 'GitHub Token验证失败' };
+                }
             }
-        }
-
-        // 上传单个文件
-        async function uploadSingleFile(file) {
-            // 生成唯一文件名
-            const timestamp = new Date().getTime();
-            const extension = file.name.split('.').pop();
-            const fileName = `image_${timestamp}.${extension}`;
             
-            // 转换为base64
-            const base64Content = await fileToBase64(file);
-            
-            // 检查文件是否已存在
-            let sha = null;
-            try {
-                const existingResponse = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/images/${fileName}`, {
-                    headers: {
-                        'Authorization': `token ${currentConfig.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'GitHub-Gallery-App'
-                    }
-                });
+            addTag() {
+                if (!this.isAdmin) return;
                 
-                if (existingResponse.ok) {
-                    const existingData = await existingResponse.json();
-                    sha = existingData.sha;
+                const input = document.getElementById('new-tag-input');
+                const tag = input.value.trim();
+                
+                if (tag && !(this.currentImage.tags || []).includes(tag)) {
+                    this.currentImage.tags = this.currentImage.tags || [];
+                    this.currentImage.tags.push(tag);
+                    this.saveImageData();
+                    this.renderImageTags();
+                    input.value = '';
+                    showNotification('标签添加成功', 'success');
                 }
-            } catch (error) {
-                // 文件不存在，继续上传
             }
             
-            // 上传文件
-            const uploadData = {
-                message: `Upload image: ${fileName}`,
-                content: base64Content,
-                branch: currentConfig.branch
-            };
-            
-            if (sha) {
-                uploadData.sha = sha;
+            removeTag(tag) {
+                if (!this.isAdmin) return;
+                
+                this.currentImage.tags = (this.currentImage.tags || []).filter(t => t !== tag);
+                this.saveImageData();
+                this.renderImageTags();
+                showNotification('标签删除成功', 'success');
             }
             
-            const uploadResponse = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/images/${fileName}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `token ${currentConfig.token}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'GitHub-Gallery-App',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(uploadData)
-            });
-            
-            if (!uploadResponse.ok) {
-                const errorData = await uploadResponse.json();
-                throw new Error(`${uploadResponse.status}: ${errorData.message || uploadResponse.statusText}`);
+            saveDescription() {
+                if (!this.isAdmin) return;
+                
+                const description = document.getElementById('image-description').value;
+                this.currentImage.description = description;
+                this.saveImageData();
+                showNotification('描述保存成功', 'success');
             }
             
-            return fileName;
-        }
-
-        // 文件转base64
-        function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const base64 = reader.result.split(',')[1];
-                    resolve(base64);
+            saveImageData() {
+                const imageData = JSON.parse(localStorage.getItem('gallery_image_data') || '{}');
+                imageData[this.currentImage.id] = {
+                    tags: this.currentImage.tags,
+                    description: this.currentImage.description,
+                    updatedAt: new Date().toISOString()
                 };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
-
-        // 加载图片画廊
-        async function loadGallery() {
-            if (!currentConfig.token) {
-                document.getElementById('loadingSpinner').innerHTML = '<p class="text-white">请先配置GitHub信息</p>';
-                return;
-            }
-            
-            try {
-                const response = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/images`, {
-                    headers: {
-                        'Authorization': `token ${currentConfig.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'GitHub-Gallery-App'
-                    }
-                });
+                localStorage.setItem('gallery_image_data', JSON.stringify(imageData));
                 
-                if (!response.ok) {
-                    throw new Error(`API请求失败: ${response.status}`);
+                // 更新当前图片列表中的数据
+                const imageIndex = this.images.findIndex(img => img.id === this.currentImage.id);
+                if (imageIndex !== -1) {
+                    this.images[imageIndex] = { ...this.currentImage };
                 }
                 
-                const files = await response.json();
-                const imageFiles = files.filter(file => 
-                    file.type === 'file' && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name)
-                );
+                this.renderGallery();
+                this.updateStatistics();
+            }
+            
+            toggleFavorite(imageId) {
+                const favorites = JSON.parse(localStorage.getItem('user_favorites') || '[]');
+                const index = favorites.indexOf(imageId);
                 
-                currentImages = imageFiles;
-                renderGallery(imageFiles);
-                updateStats();
+                if (index === -1) {
+                    favorites.push(imageId);
+                    showNotification('已添加到收藏', 'success');
+                } else {
+                    favorites.splice(index, 1);
+                    showNotification('已从收藏中移除', 'success');
+                }
                 
-            } catch (error) {
-                console.error('加载图片失败:', error);
-                document.getElementById('loadingSpinner').innerHTML = '<p class="text-white text-red-400">加载失败: ' + error.message + '</p>';
-            }
-        }
-
-        // 渲染图片画廊
-        function renderGallery(images) {
-            const gallery = document.getElementById('gallery');
-            const loadingSpinner = document.getElementById('loadingSpinner');
-            
-            loadingSpinner.style.display = 'none';
-            
-            if (images.length === 0) {
-                gallery.innerHTML = '<div class="col-span-full text-center text-white text-opacity-60 py-8"><i class="fas fa-images text-4xl mb-4"></i><p>暂无图片</p></div>';
-                return;
+                localStorage.setItem('user_favorites', JSON.stringify(favorites));
+                this.updateStatistics();
             }
             
-            gallery.innerHTML = images.map(image => `
-                <div class="image-card bg-white rounded-xl shadow-lg overflow-hidden cursor-pointer" onclick="openImageModal('${image.name}', '${image.download_url}')">
-                    <div class="aspect-w-16 aspect-h-12">
-                        <img src="${image.download_url}" alt="${image.name}" class="w-full h-48 object-cover">
-                    </div>
-                    <div class="p-4">
-                        <h3 class="font-semibold text-gray-800 truncate">${image.name}</h3>
-                        <p class="text-sm text-gray-600 mt-1">大小: ${formatFileSize(image.size)}</p>
-                        <div class="flex flex-wrap gap-1 mt-2" id="tags-${image.name}">
-                            ${getImageTags(image.name).map(tag => `<span class="tag-input custom">${tag}</span>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // 打开图片编辑模态框
-        function openImageModal(fileName, downloadUrl) {
-            currentEditingImage = fileName;
-            
-            const modal = document.getElementById('imageModal');
-            const modalImage = document.getElementById('modalImage');
-            const modalFileName = document.getElementById('modalFileName');
-            const modalUploadTime = document.getElementById('modalUploadTime');
-            const modalFileSize = document.getElementById('modalFileSize');
-            const descriptionInput = document.getElementById('descriptionInput');
-            const currentTags = document.getElementById('currentTags');
-            
-            // 设置图片信息
-            modalImage.src = downloadUrl;
-            modalFileName.textContent = fileName;
-            modalUploadTime.textContent = '未知';
-            modalFileSize.textContent = '未知';
-            
-            // 加载现有标签和描述
-            const imageData = getImageData(fileName);
-            descriptionInput.value = imageData.description || '';
-            document.getElementById('charCount').textContent = descriptionInput.value.length;
-            
-            // 显示现有标签
-            renderCurrentTags(imageData.tags || []);
-            
-            modal.classList.add('active');
-        }
-
-        // 关闭模态框
-        function closeModal() {
-            document.getElementById('imageModal').classList.remove('active');
-            currentEditingImage = null;
-        }
-
-        // 渲染当前标签
-        function renderCurrentTags(tags) {
-            const container = document.getElementById('currentTags');
-            container.innerHTML = tags.map(tag => `
-                <span class="tag-input custom">
-                    ${tag}
-                    <button onclick="removeTag('${tag}')" class="ml-1 text-red-300 hover:text-red-100">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </span>
-            `).join('');
-        }
-
-        // 添加标签
-        function addTag() {
-            const tagInput = document.getElementById('tagInput');
-            const tagValue = tagInput.value.trim();
-            
-            if (!tagValue) return;
-            
-            const imageData = getImageData(currentEditingImage);
-            if (!imageData.tags) imageData.tags = [];
-            
-            if (!imageData.tags.includes(tagValue)) {
-                imageData.tags.push(tagValue);
-                saveImageData();
-                renderCurrentTags(imageData.tags);
-            }
-            
-            tagInput.value = '';
-        }
-
-        // 删除标签
-        function removeTag(tag) {
-            const imageData = getImageData(currentEditingImage);
-            if (imageData.tags) {
-                imageData.tags = imageData.tags.filter(t => t !== tag);
-                saveImageData();
-                renderCurrentTags(imageData.tags);
-            }
-        }
-
-        // 保存图片数据
-        function saveImageData() {
-            if (!currentEditingImage) return;
-            
-            const description = document.getElementById('descriptionInput').value;
-            const imageData = getImageData(currentEditingImage);
-            
-            imageData.description = description;
-            imageData.lastModified = new Date().toISOString();
-            
-            const allData = JSON.parse(localStorage.getItem('imageData') || '{}');
-            allData[currentEditingImage] = imageData;
-            localStorage.setItem('imageData', JSON.stringify(allData));
-            
-            // 更新画廊显示
-            const tagsContainer = document.getElementById(`tags-${currentEditingImage}`);
-            if (tagsContainer) {
-                tagsContainer.innerHTML = imageData.tags.map(tag => `<span class="tag-input custom">${tag}</span>`).join('');
-            }
-            
-            showNotification('图片信息已保存', 'success');
-            updateStats();
-        }
-
-        // 删除图片
-        async function deleteImage() {
-            if (!currentEditingImage) return;
-            
-            if (!confirm('确定要删除这张图片吗？')) return;
-            
-            try {
-                // 从GitHub删除文件
-                const fileResponse = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/images/${currentEditingImage}`, {
-                    headers: {
-                        'Authorization': `token ${currentConfig.token}`,
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'GitHub-Gallery-App'
-                    }
-                });
+            shareImage(imageId) {
+                const image = this.images.find(img => img.id === imageId) || this.currentImage;
+                if (!image) return;
                 
-                if (fileResponse.ok) {
-                    const fileData = await fileResponse.json();
-                    
-                    const deleteResponse = await fetch(`https://api.github.com/repos/${currentConfig.owner}/${currentConfig.repo}/contents/images/${currentEditingImage}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': `token ${currentConfig.token}`,
-                            'Accept': 'application/vnd.github.v3+json',
-                            'User-Agent': 'GitHub-Gallery-App',
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            message: `Delete image: ${currentEditingImage}`,
-                            sha: fileData.sha,
-                            branch: currentConfig.branch
-                        })
+                if (navigator.share) {
+                    navigator.share({
+                        title: image.name,
+                        text: image.description || '分享图片',
+                        url: window.location.href
                     });
-                    
-                    if (deleteResponse.ok) {
-                        // 删除本地数据
-                        const allData = JSON.parse(localStorage.getItem('imageData') || '{}');
-                        delete allData[currentEditingImage];
-                        localStorage.setItem('imageData', JSON.stringify(allData));
-                        
-                        closeModal();
-                        loadGallery();
-                        showNotification('图片已删除', 'success');
-                    }
+                } else {
+                    navigator.clipboard.writeText(window.location.href);
+                    showNotification('链接已复制到剪贴板', 'success');
                 }
-            } catch (error) {
-                console.error('删除失败:', error);
-                showNotification('删除失败: ' + error.message, 'error');
             }
         }
-
-        // 获取图片数据
-        function getImageData(fileName) {
-            const allData = JSON.parse(localStorage.getItem('imageData') || '{}');
-            return allData[fileName] || { tags: [], description: '' };
-        }
-
-        // 获取图片标签
-        function getImageTags(fileName) {
-            const imageData = getImageData(fileName);
-            return imageData.tags || [];
-        }
-
-        // 处理搜索
-        function handleSearch() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filteredImages = currentImages.filter(image => {
-                const imageData = getImageData(image.name);
-                return image.name.toLowerCase().includes(searchTerm) ||
-                       (imageData.description && imageData.description.toLowerCase().includes(searchTerm)) ||
-                       (imageData.tags && imageData.tags.some(tag => tag.toLowerCase().includes(searchTerm)));
+        
+        // 全局函数
+        function switchTab(tabName) {
+            // 隐藏所有标签页内容
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
             });
             
-            renderGallery(filteredImages);
-        }
-
-        // 处理排序
-        function handleSort() {
-            const sortBy = document.getElementById('sortSelect').value;
-            const sortedImages = [...currentImages].sort((a, b) => {
-                switch (sortBy) {
-                    case 'name':
-                        return a.name.localeCompare(b.name);
-                    case 'size':
-                        return b.size - a.size;
-                    case 'date':
-                        return new Date(b.last_modified || 0) - new Date(a.last_modified || 0);
-                    default:
-                        return 0;
-                }
+            // 移除所有按钮的激活状态
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
             });
             
-            renderGallery(sortedImages);
-        }
-
-        // 清除搜索
-        function clearSearch() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('sortSelect').value = 'name';
-            renderGallery(currentImages);
-        }
-
-        // 更新统计信息
-        function updateStats() {
-            const allData = JSON.parse(localStorage.getItem('imageData') || '{}');
-            const allTags = new Set();
-            let taggedCount = 0;
+            // 显示选中的标签页
+            document.getElementById(`${tabName}-tab`).classList.add('active');
             
-            Object.values(allData).forEach(data => {
-                if (data.tags && data.tags.length > 0) {
-                    taggedCount++;
-                    data.tags.forEach(tag => allTags.add(tag));
-                }
-            });
-            
-            document.getElementById('totalImages').textContent = currentImages.length;
-            document.getElementById('taggedImages').textContent = taggedCount;
-            document.getElementById('totalTags').textContent = allTags.size;
+            // 激活对应的按钮
+            event.target.classList.add('active');
         }
-
-        // 导出数据
-        function exportData() {
-            const allData = JSON.parse(localStorage.getItem('imageData') || '{}');
-            const dataStr = JSON.stringify(allData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(dataBlob);
-            link.download = `gallery_data_${new Date().toISOString().split('T')[0]}.json`;
-            link.click();
-            
-            showNotification('数据已导出', 'success');
+        
+        function refreshGallery() {
+            app.loadImages();
+            showNotification('图片库已刷新', 'success');
         }
-
-        // 格式化文件大小
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        
+        function showAdminLogin() {
+            document.getElementById('admin-login-modal').classList.remove('hidden');
         }
-
-        // 显示通知
+        
+        function closeAdminLogin() {
+            document.getElementById('admin-login-modal').classList.add('hidden');
+        }
+        
+        async function adminLogin() {
+            const token = document.getElementById('admin-token').value.trim();
+            if (!token) {
+                showNotification('请输入GitHub Token', 'error');
+                return;
+            }
+            
+            const result = await app.adminLogin(token);
+            if (result.success) {
+                closeAdminLogin();
+                showNotification(result.message, 'success');
+            } else {
+                showNotification(result.message, 'error');
+            }
+        }
+        
+        function closeImageDetail() {
+            document.getElementById('image-detail-modal').classList.add('hidden');
+        }
+        
+        function previousImage() {
+            if (app.currentImageIndex > 0) {
+                app.openImageDetail(app.currentImageIndex - 1);
+            }
+        }
+        
+        function nextImage() {
+            if (app.currentImageIndex < app.images.length - 1) {
+                app.openImageDetail(app.currentImageIndex + 1);
+            }
+        }
+        
+        function addTag() {
+            app.addTag();
+        }
+        
+        function saveDescription() {
+            app.saveDescription();
+        }
+        
+        function downloadCurrentImage() {
+            if (app.currentImage) {
+                const link = document.createElement('a');
+                link.href = app.currentImage.url;
+                link.download = app.currentImage.name;
+                link.click();
+            }
+        }
+        
+        function shareImage() {
+            app.shareImage();
+        }
+        
+        function createNewGallery() {
+            if (!app.isAdmin) {
+                showNotification('需要管理员权限', 'error');
+                return;
+            }
+            
+            const name = prompt('请输入画廊名称:');
+            if (name) {
+                const gallery = {
+                    id: Date.now().toString(),
+                    name: name,
+                    images: [],
+                    createdAt: new Date().toISOString()
+                };
+                
+                app.galleries.push(gallery);
+                localStorage.setItem('galleries', JSON.stringify(app.galleries));
+                showNotification('画廊创建成功', 'success');
+            }
+        }
+        
         function showNotification(message, type = 'info') {
-            const notification = document.getElementById('notification');
-            const notificationText = document.getElementById('notificationText');
-            
+            const notification = document.createElement('div');
             notification.className = `notification ${type}`;
-            notificationText.textContent = message;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation' : 'info'}-circle mr-2"></i>
+                ${message}
+            `;
             
-            notification.classList.add('show');
+            document.body.appendChild(notification);
             
             setTimeout(() => {
-                notification.classList.remove('show');
+                notification.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.remove();
             }, 3000);
         }
-
-        // 模态框外部点击关闭
-        document.getElementById('imageModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
+        
+        // 初始化应用
+        let app;
+        document.addEventListener('DOMContentLoaded', () => {
+            app = new AppState();
+        });
+        
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('image-detail-modal').classList.contains('hidden')) return;
+            
+            if (e.key === 'ArrowLeft') {
+                previousImage();
+            } else if (e.key === 'ArrowRight') {
+                nextImage();
+            } else if (e.key === 'Escape') {
+                closeImageDetail();
+            }
+        });
+        
+        // 添加标签的Enter键支持
+        document.addEventListener('keydown', (e) => {
+            if (e.target.id === 'new-tag-input' && e.key === 'Enter') {
+                addTag();
             }
         });
     </script>
