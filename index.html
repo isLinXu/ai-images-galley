@@ -166,11 +166,13 @@
 
         .modal-image-container {
             position: relative;
-            max-height: calc(90vh - 200px);
+            max-height: calc(80vh - 120px); /* 动态调整，预留标题和控制栏空间 */
+            min-height: 200px;
             overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
+            padding: 1rem;
         }
 
         .modal-image {
@@ -184,15 +186,20 @@
             position: absolute;
             top: 50%;
             transform: translateY(-50%);
-            z-index: 10;
+            z-index: 20; /* 确保按钮在图片之上 */
+            background: var(--surface-color);
+            padding: 0.75rem;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .modal-control-bar {
             position: sticky;
             bottom: 0;
             background: var(--surface-color);
-            padding: 1rem;
-            z-index: 10;
+            padding: 1.5rem;
+            z-index: 20; /* 确保控制栏在图片之上 */
+            border-top: 1px solid var(--border-color);
         }
 
         @media (max-width: 640px) {
@@ -201,6 +208,13 @@
             }
             .modal-content {
                 max-width: 95vw;
+            }
+            .modal-image-container {
+                max-height: calc(70vh - 100px); /* 小屏幕上减少高度 */
+                padding: 0.5rem;
+            }
+            .modal-nav-btn {
+                padding: 0.5rem;
             }
         }
 
@@ -381,7 +395,7 @@
     <div id="image-detail-modal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center p-4">
         <div class="glass-effect rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto modal-content">
             <div class="p-6">
-                <div class="flex justify-between items-center mb-6 sticky top-0 bg-[var(--surface-color)] z-10">
+                <div class="flex justify-between items-center mb-6 sticky top-0 bg-[var(--surface-color)] z-20">
                     <h2 id="modal-title" class="text-2xl font-bold high-contrast-text">图片详情</h2>
                     <button onclick="closeImageModal()" class="text-gray-500 hover:text-gray-700 text-2xl">
                         <i class="fas fa-times"></i>
@@ -389,11 +403,11 @@
                 </div>
                 <div class="grid lg:grid-cols-2 gap-8">
                     <div class="modal-image-container">
-                        <button onclick="navigateImage(-1)" class="modal-nav-btn left-4 theme-btn p-3 rounded-full">
+                        <button onclick="navigateImage(-1)" class="modal-nav-btn left-4">
                             <i class="fas fa-chevron-left"></i>
                         </button>
                         <img id="modal-image" class="modal-image" alt="">
-                        <button onclick="navigateImage(1)" class="modal-nav-btn right-4 theme-btn p-3 rounded-full">
+                        <button onclick="navigateImage(1)" class="modal-nav-btn right-4">
                             <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
@@ -821,7 +835,7 @@
                 const confidences = [
                     ...results.objects.map(o => o.confidence),
                     ...results.scenes.map(s => s.confidence),
-                    ...results.emotions.map(e => e.confidence)
+                    ...results.emotions.map(e => o.confidence)
                 ];
                 return confidences.length > 0 ? 
                     confidences.reduce((a, b) => a + b) / confidences.length : 0;
@@ -1081,17 +1095,58 @@
         });
 
         // 自适应缩放图片
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
         function adjustImageSize() {
             const modalImage = document.getElementById('modal-image');
             const container = document.querySelector('.modal-image-container');
-            if (modalImage && container) {
-                const maxHeight = window.innerHeight * 0.9 - 200; // 为按钮预留空间
-                container.style.maxHeight = `${maxHeight}px`;
-                modalImage.style.maxHeight = `${maxHeight}px`;
+            const modalContent = document.querySelector('.modal-content');
+            const titleBar = document.querySelector('.modal-content > div > div:first-child');
+            const controlBar = document.querySelector('.modal-control-bar');
+
+            if (modalImage && container && modalContent && titleBar && controlBar) {
+                const windowHeight = window.innerHeight;
+                const titleBarHeight = titleBar.offsetHeight || 60; // 标题栏高度
+                const controlBarHeight = controlBar.offsetHeight || 60; // 控制栏高度
+                const padding = 32; // 上下边距总和 (2 * 1rem)
+                const maxImageHeight = windowHeight * 0.8 - titleBarHeight - controlBarHeight - padding;
+
+                container.style.maxHeight = `${maxImageHeight}px`;
+                container.style.minHeight = `200px`;
+                modalImage.style.maxHeight = `${maxImageHeight}px`;
+
+                // 动态调整模态框内容区域的最大高度
+                modalContent.style.maxHeight = `${windowHeight * 0.9}px`;
+
+                // 确保图片加载后重新调整
+                modalImage.onload = () => {
+                    const aspectRatio = modalImage.naturalWidth / modalImage.naturalHeight;
+                    const containerWidth = container.offsetWidth - 32; // 减去左右padding
+                    const maxImageWidth = maxImageHeight * aspectRatio;
+
+                    if (maxImageWidth < containerWidth) {
+                        modalImage.style.maxWidth = `${maxImageWidth}px`;
+                    } else {
+                        modalImage.style.maxWidth = `${containerWidth}px`;
+                        modalImage.style.maxHeight = `${containerWidth / aspectRatio}px`;
+                    }
+                };
             }
         }
 
-        window.addEventListener('resize', adjustImageSize);
+        // 使用防抖优化窗口调整事件
+        const debouncedAdjustImageSize = debounce(adjustImageSize, 100);
+        window.addEventListener('resize', debouncedAdjustImageSize);
 
         function checkAdminStatus() {
             const token = localStorage.getItem('github_token');
@@ -1232,9 +1287,9 @@
 
             card.innerHTML = `
                 <div class="relative">
-                    <img data-src="${image.url}" src="https://via.placeholder.com/400x300?text=加载中" 
+                    <img data-src="${image.url}" src="https://via.placeholder.com/400/300?text=加载中" 
                          alt="${image.name}" class="w-full h-48 object-cover"
-                         onerror="this.src='https://via.placeholder.com/400x300?text=图片加载失败'">
+                         onerror="this.src='https://via.placeholder.com/400/300?text=图片加载失败'">
                     <div class="ai-analysis-preview absolute top-2 right-2 px-3 py-1 rounded-lg text-xs">
                         <i class="fas fa-brain mr-1"></i>
                         AI: ${analysis ? Math.round(analysis.confidence * 100) : 0}%
@@ -1739,83 +1794,4 @@
                 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 'linear-gradient(135deg, #134e5e 0%, #71b280 100%)',
-                'linear-gradient(135deg, #ff6b6b 0%, #feca57 50%, #ff9ff3 100%)'
-            ];
-
-            document.body.style.background = themes[themeIndex];
-            localStorage.setItem('selected_theme', themeIndex);
-        }
-
-        function initializeTagFilter() {
-            const tagFilter = document.getElementById('tag-filter');
-            const tags = new Set();
-            aiAnalysisResults.forEach(analysis => {
-                analysis.smartTags.forEach(tag => tags.add(tag));
-            });
-
-            tagFilter.innerHTML = '<option value="">所有标签</option>' + 
-                Array.from(tags).map(tag => `<option value="${tag}">${tag}</option>`).join('');
-        }
-
-        function updateTagFilter() {
-            initializeTagFilter();
-        }
-
-        function bindEvents() {
-            const searchInput = document.getElementById('search-input');
-            const tagFilter = document.getElementById('tag-filter');
-            const sortOption = document.getElementById('sort-option');
-
-            searchInput.addEventListener('input', () => {
-                const query = searchInput.value.toLowerCase();
-                const filteredImages = currentImages.filter(image => {
-                    const analysis = aiAnalysisResults.get(image.id);
-                    return image.name.toLowerCase().includes(query) ||
-                           (analysis && analysis.smartTags.some(tag => tag.toLowerCase().includes(query)));
-                });
-                renderImages(filteredImages);
-            });
-
-            tagFilter.addEventListener('change', () => {
-                const selectedTag = tagFilter.value;
-                const filteredImages = selectedTag ? 
-                    currentImages.filter(image => {
-                        const analysis = aiAnalysisResults.get(image.id);
-                        return analysis && analysis.smartTags.includes(selectedTag);
-                    }) : 
-                    currentImages;
-                renderImages(filteredImages);
-            });
-
-            sortOption.addEventListener('change', () => {
-                const sortValue = sortOption.value;
-                let sortedImages = [...currentImages];
-
-                if (sortValue === 'newest') {
-                    sortedImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                } else if (sortValue === 'oldest') {
-                    sortedImages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-                } else if (sortValue === 'name') {
-                    sortedImages.sort((a, b) => a.name.localeCompare(b.name));
-                } else if (sortValue === 'ai-score') {
-                    sortedImages.sort((a, b) => {
-                        const scoreA = aiAnalysisResults.get(a.id)?.confidence || 0;
-                        const scoreB = aiAnalysisResults.get(b.id)?.confidence || 0;
-                        return scoreB - scoreA;
-                    });
-                }
-
-                renderImages(sortedImages);
-            });
-
-            document.addEventListener('keydown', (event) => {
-                if (!document.getElementById('image-detail-modal').classList.contains('hidden')) {
-                    if (event.key === 'ArrowLeft') navigateImage(-1);
-                    if (event.key === 'ArrowRight') navigateImage(1);
-                    if (event.key === 'Escape') closeImageModal();
-                }
-            });
-        }
-    </script>
-</body>
-</html>
+                'linear-gradient(135deg, #ff6b6b 0%, #feca57 50
