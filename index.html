@@ -1,0 +1,969 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI智能电子相册</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .hover-scale {
+            transition: transform 0.3s ease;
+        }
+        .hover-scale:hover {
+            transform: scale(1.05);
+        }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .ai-glow {
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+        }
+        .face-box {
+            position: absolute;
+            border: 2px solid #00ff00;
+            border-radius: 4px;
+            background: rgba(0, 255, 0, 0.1);
+        }
+        .emotion-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .color-palette {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+        .color-swatch {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .smart-tag {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin: 2px;
+            display: inline-block;
+        }
+        .similarity-score {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .voice-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .analysis-panel {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <!-- 语音控制指示器 -->
+    <div class="voice-indicator">
+        <button id="voiceBtn" class="bg-blue-500 hover:bg-blue-600 text-white p-3 rounded-full shadow-lg">
+            <i class="fas fa-microphone"></i>
+        </button>
+        <div id="voiceStatus" class="hidden mt-2 text-white text-sm bg-black bg-opacity-50 p-2 rounded">
+            正在听...
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="container mx-auto px-4 py-8">
+        <!-- 头部 -->
+        <div class="glass-effect rounded-2xl p-6 mb-8 text-white">
+            <h1 class="text-4xl font-bold mb-2 text-center">
+                <i class="fas fa-brain mr-3"></i>AI智能电子相册
+            </h1>
+            <p class="text-center text-lg opacity-90">
+                集成人工智能的下一代相册体验
+            </p>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="glass-effect rounded-2xl p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <!-- AI分析控制 -->
+                <div class="bg-white bg-opacity-20 rounded-xl p-4">
+                    <h3 class="text-white font-semibold mb-3">
+                        <i class="fas fa-robot mr-2"></i>AI分析
+                    </h3>
+                    <div class="space-y-2">
+                        <button onclick="analyzeAllImages()" class="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-search mr-2"></i>智能分析
+                        </button>
+                        <button onclick="generateSmartAlbum()" class="w-full bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-magic mr-2"></i>智能相册
+                        </button>
+                        <button onclick="startSmartSlideshow()" class="w-full bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-play mr-2"></i>智能幻灯片
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 搜索和过滤 -->
+                <div class="bg-white bg-opacity-20 rounded-xl p-4">
+                    <h3 class="text-white font-semibold mb-3">
+                        <i class="fas fa-filter mr-2"></i>智能搜索
+                    </h3>
+                    <input type="text" id="smartSearch" placeholder="描述你要找的图片..."
+                           class="w-full p-2 rounded-lg bg-white bg-opacity-20 text-white placeholder-gray-300 mb-2">
+                    <select id="categoryFilter" class="w-full p-2 rounded-lg bg-white bg-opacity-20 text-white mb-2">
+                        <option value="">所有类别</option>
+                        <option value="人物">人物</option>
+                        <option value="风景">风景</option>
+                        <option value="建筑">建筑</option>
+                        <option value="动物">动物</option>
+                        <option value="食物">食物</option>
+                    </select>
+                    <select id="emotionFilter" class="w-full p-2 rounded-lg bg-white bg-opacity-20 text-white">
+                        <option value="">所有情感</option>
+                        <option value="开心">开心</option>
+                        <option value="平静">平静</option>
+                        <option value="兴奋">兴奋</option>
+                        <option value="忧郁">忧郁</option>
+                    </select>
+                </div>
+
+                <!-- 统计面板 -->
+                <div class="bg-white bg-opacity-20 rounded-xl p-4">
+                    <h3 class="text-white font-semibold mb-3">
+                        <i class="fas fa-chart-bar mr-2"></i>智能统计
+                    </h3>
+                    <div class="text-white text-sm">
+                        <div class="flex justify-between mb-1">
+                            <span>总图片:</span>
+                            <span id="totalCount">0</span>
+                        </div>
+                        <div class="flex justify-between mb-1">
+                            <span>已分析:</span>
+                            <span id="analyzedCount">0</span>
+                        </div>
+                        <div class="flex justify-between mb-1">
+                            <span>人脸数:</span>
+                            <span id="faceCount">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>主色调:</span>
+                            <span id="dominantColor">未知</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文件上传 -->
+            <div class="bg-white bg-opacity-20 rounded-xl p-4 mb-4">
+                <input type="file" id="imageUpload" multiple accept="image/*" class="hidden">
+                <label for="imageUpload" class="block w-full p-4 border-2 border-dashed border-white border-opacity-50 rounded-lg text-center text-white cursor-pointer hover:border-opacity-100">
+                    <i class="fas fa-cloud-upload-alt text-2xl mb-2"></i>
+                    <div>点击上传图片或拖拽到此处</div>
+                    <div class="text-sm opacity-75">支持 JPG, PNG, GIF 格式</div>
+                </label>
+            </div>
+        </div>
+
+        <!-- AI分析结果面板 -->
+        <div id="analysisPanel" class="glass-effect rounded-2xl p-6 mb-8 hidden">
+            <h3 class="text-white text-xl font-semibold mb-4">
+                <i class="fas fa-brain mr-2"></i>AI分析结果
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 图表区域 -->
+                <div class="bg-white bg-opacity-20 rounded-xl p-4">
+                    <h4 class="text-white font-semibold mb-3">类别分布</h4>
+                    <div style="height: 300px;">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white bg-opacity-20 rounded-xl p-4">
+                    <h4 class="text-white font-semibold mb-3">情感分析</h4>
+                    <div style="height: 300px;">
+                        <canvas id="emotionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 相似图片推荐 -->
+        <div id="similarImages" class="glass-effect rounded-2xl p-6 mb-8 hidden">
+            <h3 class="text-white text-xl font-semibold mb-4">
+                <i class="fas fa-images mr-2"></i>相似图片推荐
+            </h3>
+            <div id="similarGrid" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- 相似图片将在这里显示 -->
+            </div>
+        </div>
+
+        <!-- 图片网格 -->
+        <div id="imageGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- 图片将在这里动态生成 -->
+        </div>
+
+        <!-- 智能幻灯片模式 -->
+        <div id="smartSlideshow" class="fixed inset-0 bg-black bg-opacity-95 z-50 hidden">
+            <div class="absolute top-4 right-4 z-60">
+                <button onclick="stopSmartSlideshow()" class="text-white text-2xl hover:text-gray-300">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="h-full flex items-center justify-center">
+                <div class="text-center">
+                    <img id="slideImage" class="max-w-full max-h-96 mx-auto rounded-lg mb-4">
+                    <div class="text-white">
+                        <h3 id="slideTitle" class="text-2xl font-bold mb-2"></h3>
+                        <p id="slideDescription" class="text-lg opacity-75 mb-4"></p>
+                        <div id="slideAIInfo" class="text-sm opacity-60"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                <div class="flex items-center space-x-4 text-white">
+                    <button onclick="prevSlide()" class="text-2xl hover:text-gray-300">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button onclick="toggleSlideshow()" class="text-2xl hover:text-gray-300">
+                        <i id="playPauseIcon" class="fas fa-pause"></i>
+                    </button>
+                    <button onclick="nextSlide()" class="text-2xl hover:text-gray-300">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图片详情模态框 -->
+        <div id="imageModal" class="fixed inset-0 bg-black bg-opacity-75 z-40 hidden">
+            <div class="h-full flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl max-w-4xl max-h-full overflow-auto">
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-2xl font-bold">图片详情</h3>
+                            <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <div class="relative">
+                                    <img id="modalImage" class="w-full rounded-lg">
+                                    <div id="modalFaceBoxes"></div>
+                                    <div id="modalEmotionIndicator"></div>
+                                </div>
+                            </div>
+                            <div class="analysis-panel">
+                                <div class="space-y-4">
+                                    <div>
+                                        <h4 class="font-semibold text-gray-700 mb-2">AI分析结果</h4>
+                                        <div id="modalAITags" class="mb-3"></div>
+                                        <div id="modalAIDescription" class="text-gray-600"></div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-gray-700 mb-2">颜色分析</h4>
+                                        <div id="modalColorPalette" class="color-palette"></div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-gray-700 mb-2">技术信息</h4>
+                                        <div id="modalTechInfo" class="text-sm text-gray-600"></div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-gray-700 mb-2">相似度分析</h4>
+                                        <div id="modalSimilarity" class="text-sm text-gray-600"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let photos = [];
+        let currentSlideIndex = 0;
+        let slideshowInterval;
+        let isAnalyzing = false;
+        let voiceRecognition;
+        let categoryChart, emotionChart;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            setupVoiceControl();
+            setupFileUpload();
+            setupEventListeners();
+            
+            // 添加一些示例图片
+            addSampleImages();
+        });
+
+        function initializeApp() {
+            console.log('AI智能电子相册启动');
+            updateStatistics();
+        }
+
+        function addSampleImages() {
+            const sampleImages = [
+                {
+                    src: 'https://picsum.photos/400/300?random=1',
+                    title: '美丽风景',
+                    description: '山川湖泊的壮美景色',
+                    aiAnalysis: {
+                        categories: ['风景', '自然', '山川'],
+                        emotions: ['平静', '壮美'],
+                        colors: ['#4a90e2', '#7ed321', '#f8e71c'],
+                        faces: [],
+                        confidence: 0.95
+                    }
+                },
+                {
+                    src: 'https://picsum.photos/400/300?random=2',
+                    title: '城市建筑',
+                    description: '现代都市的建筑群',
+                    aiAnalysis: {
+                        categories: ['建筑', '城市', '现代'],
+                        emotions: ['现代', '繁忙'],
+                        colors: ['#9013fe', '#4a90e2', '#bd10e0'],
+                        faces: [],
+                        confidence: 0.88
+                    }
+                },
+                {
+                    src: 'https://picsum.photos/400/300?random=3',
+                    title: '人物肖像',
+                    description: '人物特写照片',
+                    aiAnalysis: {
+                        categories: ['人物', '肖像'],
+                        emotions: ['开心', '友好'],
+                        colors: ['#f5a623', '#d0021b', '#4a90e2'],
+                        faces: [{x: 100, y: 50, width: 120, height: 140, emotion: '开心'}],
+                        confidence: 0.92
+                    }
+                },
+                {
+                    src: 'https://picsum.photos/400/300?random=4',
+                    title: '动物世界',
+                    description: '野生动物摄影',
+                    aiAnalysis: {
+                        categories: ['动物', '野生', '自然'],
+                        emotions: ['野性', '自由'],
+                        colors: ['#8b572a', '#7ed321', '#f8e71c'],
+                        faces: [],
+                        confidence: 0.87
+                    }
+                }
+            ];
+
+            photos = sampleImages;
+            renderImages();
+            updateStatistics();
+        }
+
+        function setupVoiceControl() {
+            if ('webkitSpeechRecognition' in window) {
+                voiceRecognition = new webkitSpeechRecognition();
+                voiceRecognition.continuous = false;
+                voiceRecognition.interimResults = false;
+                voiceRecognition.lang = 'zh-CN';
+
+                voiceRecognition.onstart = function() {
+                    document.getElementById('voiceStatus').classList.remove('hidden');
+                };
+
+                voiceRecognition.onend = function() {
+                    document.getElementById('voiceStatus').classList.add('hidden');
+                };
+
+                voiceRecognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    processVoiceCommand(transcript);
+                };
+
+                document.getElementById('voiceBtn').addEventListener('click', function() {
+                    voiceRecognition.start();
+                });
+            } else {
+                document.getElementById('voiceBtn').style.display = 'none';
+            }
+        }
+
+        function processVoiceCommand(command) {
+            console.log('语音指令:', command);
+            
+            if (command.includes('分析') || command.includes('智能分析')) {
+                analyzeAllImages();
+            } else if (command.includes('幻灯片') || command.includes('播放')) {
+                startSmartSlideshow();
+            } else if (command.includes('搜索')) {
+                const searchTerm = command.replace('搜索', '').trim();
+                document.getElementById('smartSearch').value = searchTerm;
+                performSmartSearch();
+            } else if (command.includes('停止') || command.includes('暂停')) {
+                stopSmartSlideshow();
+            } else if (command.includes('下一张')) {
+                nextSlide();
+            } else if (command.includes('上一张')) {
+                prevSlide();
+            } else if (command.includes('生成相册')) {
+                generateSmartAlbum();
+            }
+        }
+
+        function setupFileUpload() {
+            const uploadInput = document.getElementById('imageUpload');
+            const uploadArea = uploadInput.nextElementSibling;
+
+            uploadInput.addEventListener('change', handleFileUpload);
+
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('border-blue-300');
+            });
+
+            uploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('border-blue-300');
+            });
+
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('border-blue-300');
+                const files = e.dataTransfer.files;
+                handleFiles(files);
+            });
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            Array.from(files).forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const photo = {
+                            src: e.target.result,
+                            title: file.name,
+                            description: '用户上传的图片',
+                            aiAnalysis: null,
+                            file: file
+                        };
+                        photos.push(photo);
+                        renderImages();
+                        updateStatistics();
+                        
+                        // 自动分析新上传的图片
+                        setTimeout(() => {
+                            analyzeImage(photo, photos.length - 1);
+                        }, 100);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('smartSearch').addEventListener('input', performSmartSearch);
+            document.getElementById('categoryFilter').addEventListener('change', performSmartSearch);
+            document.getElementById('emotionFilter').addEventListener('change', performSmartSearch);
+
+            // 键盘快捷键
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    stopSmartSlideshow();
+                }
+                if (document.getElementById('smartSlideshow').classList.contains('hidden') === false) {
+                    if (e.key === 'ArrowLeft') prevSlide();
+                    if (e.key === 'ArrowRight') nextSlide();
+                    if (e.key === ' ') {
+                        e.preventDefault();
+                        toggleSlideshow();
+                    }
+                }
+            });
+        }
+
+        function renderImages() {
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+
+            photos.forEach((photo, index) => {
+                const imageCard = createImageCard(photo, index);
+                grid.appendChild(imageCard);
+            });
+        }
+
+        function createImageCard(photo, index) {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-2xl shadow-lg overflow-hidden hover-scale cursor-pointer';
+            if (photo.aiAnalysis) {
+                card.classList.add('ai-glow');
+            }
+
+            const isAnalyzing = photo.aiAnalysis === null;
+            const analysisStatus = isAnalyzing ? 'pulse-animation' : '';
+
+            card.innerHTML = `
+                <div class="relative">
+                    <img src="${photo.src}" alt="${photo.title}" class="w-full h-48 object-cover ${analysisStatus}">
+                    ${photo.aiAnalysis && photo.aiAnalysis.faces.length > 0 ? 
+                        photo.aiAnalysis.faces.map(face => 
+                            `<div class="face-box" style="left: ${face.x}px; top: ${face.y}px; width: ${face.width}px; height: ${face.height}px;"></div>`
+                        ).join('') : ''
+                    }
+                    ${photo.aiAnalysis && photo.aiAnalysis.emotions.length > 0 ? 
+                        `<div class="emotion-indicator">${photo.aiAnalysis.emotions[0]}</div>` : ''
+                    }
+                    ${isAnalyzing ? '<div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"><div class="text-white"><i class="fas fa-spinner fa-spin text-2xl"></i><div class="mt-2">AI分析中...</div></div></div>' : ''}
+                </div>
+                <div class="p-4">
+                    <h3 class="font-semibold text-gray-800 mb-2">${photo.title}</h3>
+                    <p class="text-gray-600 text-sm mb-3">${photo.description}</p>
+                    ${photo.aiAnalysis ? `
+                        <div class="mb-3">
+                            ${photo.aiAnalysis.categories.map(cat => `<span class="smart-tag">${cat}</span>`).join('')}
+                        </div>
+                        <div class="color-palette">
+                            ${photo.aiAnalysis.colors.map(color => `<div class="color-swatch" style="background-color: ${color}"></div>`).join('')}
+                        </div>
+                        <div class="text-xs text-gray-500 mt-2">
+                            <i class="fas fa-brain mr-1"></i>AI分析 ${Math.round(photo.aiAnalysis.confidence * 100)}%
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            card.addEventListener('click', () => openImageModal(photo, index));
+            return card;
+        }
+
+        function openImageModal(photo, index) {
+            const modal = document.getElementById('imageModal');
+            const modalImage = document.getElementById('modalImage');
+            const modalAITags = document.getElementById('modalAITags');
+            const modalAIDescription = document.getElementById('modalAIDescription');
+            const modalColorPalette = document.getElementById('modalColorPalette');
+            const modalTechInfo = document.getElementById('modalTechInfo');
+            const modalSimilarity = document.getElementById('modalSimilarity');
+
+            modalImage.src = photo.src;
+
+            if (photo.aiAnalysis) {
+                modalAITags.innerHTML = photo.aiAnalysis.categories.map(cat => `<span class="smart-tag">${cat}</span>`).join('');
+                modalAIDescription.textContent = `AI识别出了${photo.aiAnalysis.categories.join('、')}等元素，情感倾向为${photo.aiAnalysis.emotions.join('、')}`;
+                modalColorPalette.innerHTML = photo.aiAnalysis.colors.map(color => `<div class="color-swatch" style="background-color: ${color}"></div>`).join('');
+                modalTechInfo.innerHTML = `
+                    <div>分析置信度: ${Math.round(photo.aiAnalysis.confidence * 100)}%</div>
+                    <div>检测到的人脸: ${photo.aiAnalysis.faces.length}个</div>
+                    <div>主要颜色: ${photo.aiAnalysis.colors.length}种</div>
+                `;
+                
+                // 计算相似度
+                const similarPhotos = findSimilarPhotos(photo, index);
+                modalSimilarity.innerHTML = similarPhotos.length > 0 ? 
+                    `找到${similarPhotos.length}张相似图片` : '未找到相似图片';
+            } else {
+                modalAITags.innerHTML = '<span class="text-gray-500">尚未分析</span>';
+                modalAIDescription.textContent = '点击"智能分析"按钮开始AI分析';
+                modalColorPalette.innerHTML = '';
+                modalTechInfo.innerHTML = '等待AI分析...';
+                modalSimilarity.innerHTML = '等待AI分析...';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').classList.add('hidden');
+        }
+
+        function analyzeAllImages() {
+            if (isAnalyzing) return;
+            
+            isAnalyzing = true;
+            const unanalyzedPhotos = photos.filter(photo => !photo.aiAnalysis);
+            
+            if (unanalyzedPhotos.length === 0) {
+                alert('所有图片已经分析完成！');
+                isAnalyzing = false;
+                return;
+            }
+
+            let currentIndex = 0;
+            const analyzeNext = () => {
+                if (currentIndex < unanalyzedPhotos.length) {
+                    const photo = unanalyzedPhotos[currentIndex];
+                    const photoIndex = photos.indexOf(photo);
+                    analyzeImage(photo, photoIndex);
+                    currentIndex++;
+                    setTimeout(analyzeNext, 1000); // 延迟1秒进行下一个分析
+                } else {
+                    isAnalyzing = false;
+                    showAnalysisResults();
+                }
+            };
+
+            analyzeNext();
+        }
+
+        function analyzeImage(photo, index) {
+            // 模拟AI分析过程
+            setTimeout(() => {
+                // 模拟不同类型的AI分析结果
+                const categories = ['风景', '人物', '建筑', '动物', '食物', '艺术'];
+                const emotions = ['开心', '平静', '兴奋', '忧郁', '惊讶', '愤怒'];
+                const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b', '#6c5ce7'];
+
+                const randomCategories = categories.sort(() => 0.5 - Math.random()).slice(0, 2 + Math.floor(Math.random() * 2));
+                const randomEmotions = emotions.sort(() => 0.5 - Math.random()).slice(0, 1 + Math.floor(Math.random() * 2));
+                const randomColors = colors.sort(() => 0.5 - Math.random()).slice(0, 3 + Math.floor(Math.random() * 2));
+
+                // 模拟人脸检测
+                const faces = [];
+                if (Math.random() > 0.7) { // 30%概率检测到人脸
+                    faces.push({
+                        x: Math.random() * 200,
+                        y: Math.random() * 150,
+                        width: 80 + Math.random() * 40,
+                        height: 100 + Math.random() * 50,
+                        emotion: randomEmotions[0]
+                    });
+                }
+
+                photo.aiAnalysis = {
+                    categories: randomCategories,
+                    emotions: randomEmotions,
+                    colors: randomColors,
+                    faces: faces,
+                    confidence: 0.8 + Math.random() * 0.2
+                };
+
+                renderImages();
+                updateStatistics();
+            }, 500 + Math.random() * 1000);
+        }
+
+        function showAnalysisResults() {
+            const panel = document.getElementById('analysisPanel');
+            panel.classList.remove('hidden');
+
+            // 创建类别分布图表
+            const categoryData = {};
+            const emotionData = {};
+
+            photos.forEach(photo => {
+                if (photo.aiAnalysis) {
+                    photo.aiAnalysis.categories.forEach(cat => {
+                        categoryData[cat] = (categoryData[cat] || 0) + 1;
+                    });
+                    photo.aiAnalysis.emotions.forEach(emotion => {
+                        emotionData[emotion] = (emotionData[emotion] || 0) + 1;
+                    });
+                }
+            });
+
+            createChart('categoryChart', 'doughnut', categoryData, '类别分布');
+            createChart('emotionChart', 'bar', emotionData, '情感分析');
+        }
+
+        function createChart(canvasId, type, data, title) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            if (window[canvasId + 'Instance']) {
+                window[canvasId + 'Instance'].destroy();
+            }
+
+            window[canvasId + 'Instance'] = new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: Object.keys(data),
+                    datasets: [{
+                        label: title,
+                        data: Object.values(data),
+                        backgroundColor: [
+                            '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b',
+                            '#6c5ce7', '#00b894', '#fdcb6e', '#e17055', '#74b9ff', '#a29bfe'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: 'white'
+                            }
+                        }
+                    },
+                    scales: type === 'bar' ? {
+                        y: {
+                            ticks: {
+                                color: 'white'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: 'white'
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    } : {}
+                }
+            });
+        }
+
+        function performSmartSearch() {
+            const searchTerm = document.getElementById('smartSearch').value.toLowerCase();
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const emotionFilter = document.getElementById('emotionFilter').value;
+
+            const filteredPhotos = photos.filter(photo => {
+                const matchesSearch = !searchTerm || 
+                    photo.title.toLowerCase().includes(searchTerm) ||
+                    photo.description.toLowerCase().includes(searchTerm) ||
+                    (photo.aiAnalysis && photo.aiAnalysis.categories.some(cat => cat.toLowerCase().includes(searchTerm)));
+
+                const matchesCategory = !categoryFilter || 
+                    (photo.aiAnalysis && photo.aiAnalysis.categories.includes(categoryFilter));
+
+                const matchesEmotion = !emotionFilter || 
+                    (photo.aiAnalysis && photo.aiAnalysis.emotions.includes(emotionFilter));
+
+                return matchesSearch && matchesCategory && matchesEmotion;
+            });
+
+            renderFilteredImages(filteredPhotos);
+        }
+
+        function renderFilteredImages(filteredPhotos) {
+            const grid = document.getElementById('imageGrid');
+            grid.innerHTML = '';
+
+            filteredPhotos.forEach((photo, index) => {
+                const originalIndex = photos.indexOf(photo);
+                const imageCard = createImageCard(photo, originalIndex);
+                grid.appendChild(imageCard);
+            });
+        }
+
+        function findSimilarPhotos(targetPhoto, targetIndex) {
+            if (!targetPhoto.aiAnalysis) return [];
+
+            const similarPhotos = [];
+            photos.forEach((photo, index) => {
+                if (index !== targetIndex && photo.aiAnalysis) {
+                    const similarity = calculateSimilarity(targetPhoto.aiAnalysis, photo.aiAnalysis);
+                    if (similarity > 0.6) {
+                        similarPhotos.push({ photo, similarity, index });
+                    }
+                }
+            });
+
+            return similarPhotos.sort((a, b) => b.similarity - a.similarity);
+        }
+
+        function calculateSimilarity(analysis1, analysis2) {
+            let score = 0;
+            let factors = 0;
+
+            // 类别相似度
+            const commonCategories = analysis1.categories.filter(cat => analysis2.categories.includes(cat));
+            if (commonCategories.length > 0) {
+                score += (commonCategories.length / Math.max(analysis1.categories.length, analysis2.categories.length)) * 0.4;
+            }
+            factors += 0.4;
+
+            // 情感相似度
+            const commonEmotions = analysis1.emotions.filter(emotion => analysis2.emotions.includes(emotion));
+            if (commonEmotions.length > 0) {
+                score += (commonEmotions.length / Math.max(analysis1.emotions.length, analysis2.emotions.length)) * 0.3;
+            }
+            factors += 0.3;
+
+            // 颜色相似度
+            const commonColors = analysis1.colors.filter(color => analysis2.colors.includes(color));
+            if (commonColors.length > 0) {
+                score += (commonColors.length / Math.max(analysis1.colors.length, analysis2.colors.length)) * 0.3;
+            }
+            factors += 0.3;
+
+            return factors > 0 ? score / factors : 0;
+        }
+
+        function generateSmartAlbum() {
+            const analyzedPhotos = photos.filter(photo => photo.aiAnalysis);
+            if (analyzedPhotos.length === 0) {
+                alert('请先进行AI分析！');
+                return;
+            }
+
+            // 按情感分组
+            const emotionGroups = {};
+            analyzedPhotos.forEach(photo => {
+                photo.aiAnalysis.emotions.forEach(emotion => {
+                    if (!emotionGroups[emotion]) {
+                        emotionGroups[emotion] = [];
+                    }
+                    emotionGroups[emotion].push(photo);
+                });
+            });
+
+            // 找出最大的情感组
+            const largestGroup = Object.keys(emotionGroups).reduce((a, b) => 
+                emotionGroups[a].length > emotionGroups[b].length ? a : b
+            );
+
+            alert(`智能相册生成完成！\n主题：${largestGroup}\n包含${emotionGroups[largestGroup].length}张图片`);
+
+            // 显示该组的图片
+            renderFilteredImages(emotionGroups[largestGroup]);
+        }
+
+        function startSmartSlideshow() {
+            const analyzedPhotos = photos.filter(photo => photo.aiAnalysis);
+            if (analyzedPhotos.length === 0) {
+                alert('请先进行AI分析！');
+                return;
+            }
+
+            // 按置信度排序
+            const sortedPhotos = analyzedPhotos.sort((a, b) => b.aiAnalysis.confidence - a.aiAnalysis.confidence);
+            
+            currentSlideIndex = 0;
+            document.getElementById('smartSlideshow').classList.remove('hidden');
+            
+            showSlide(sortedPhotos[currentSlideIndex]);
+            
+            slideshowInterval = setInterval(() => {
+                currentSlideIndex = (currentSlideIndex + 1) % sortedPhotos.length;
+                showSlide(sortedPhotos[currentSlideIndex]);
+            }, 4000);
+        }
+
+        function showSlide(photo) {
+            document.getElementById('slideImage').src = photo.src;
+            document.getElementById('slideTitle').textContent = photo.title;
+            document.getElementById('slideDescription').textContent = photo.description;
+            document.getElementById('slideAIInfo').innerHTML = `
+                <i class="fas fa-brain mr-1"></i>AI分析: ${photo.aiAnalysis.categories.join('、')} | 
+                情感: ${photo.aiAnalysis.emotions.join('、')} | 
+                置信度: ${Math.round(photo.aiAnalysis.confidence * 100)}%
+            `;
+        }
+
+        function stopSmartSlideshow() {
+            document.getElementById('smartSlideshow').classList.add('hidden');
+            clearInterval(slideshowInterval);
+        }
+
+        function toggleSlideshow() {
+            const icon = document.getElementById('playPauseIcon');
+            if (slideshowInterval) {
+                clearInterval(slideshowInterval);
+                slideshowInterval = null;
+                icon.className = 'fas fa-play';
+            } else {
+                const analyzedPhotos = photos.filter(photo => photo.aiAnalysis);
+                const sortedPhotos = analyzedPhotos.sort((a, b) => b.aiAnalysis.confidence - a.aiAnalysis.confidence);
+                
+                slideshowInterval = setInterval(() => {
+                    currentSlideIndex = (currentSlideIndex + 1) % sortedPhotos.length;
+                    showSlide(sortedPhotos[currentSlideIndex]);
+                }, 4000);
+                icon.className = 'fas fa-pause';
+            }
+        }
+
+        function nextSlide() {
+            const analyzedPhotos = photos.filter(photo => photo.aiAnalysis);
+            const sortedPhotos = analyzedPhotos.sort((a, b) => b.aiAnalysis.confidence - a.aiAnalysis.confidence);
+            
+            currentSlideIndex = (currentSlideIndex + 1) % sortedPhotos.length;
+            showSlide(sortedPhotos[currentSlideIndex]);
+        }
+
+        function prevSlide() {
+            const analyzedPhotos = photos.filter(photo => photo.aiAnalysis);
+            const sortedPhotos = analyzedPhotos.sort((a, b) => b.aiAnalysis.confidence - a.aiAnalysis.confidence);
+            
+            currentSlideIndex = (currentSlideIndex - 1 + sortedPhotos.length) % sortedPhotos.length;
+            showSlide(sortedPhotos[currentSlideIndex]);
+        }
+
+        function updateStatistics() {
+            const analyzedPhotos = photos.filter(photo => photo.aiAnalysis);
+            const totalFaces = analyzedPhotos.reduce((sum, photo) => sum + photo.aiAnalysis.faces.length, 0);
+            
+            // 统计最常见的颜色
+            const colorCount = {};
+            analyzedPhotos.forEach(photo => {
+                photo.aiAnalysis.colors.forEach(color => {
+                    colorCount[color] = (colorCount[color] || 0) + 1;
+                });
+            });
+            
+            const dominantColor = Object.keys(colorCount).reduce((a, b) => colorCount[a] > colorCount[b] ? a : b, '未知');
+
+            document.getElementById('totalCount').textContent = photos.length;
+            document.getElementById('analyzedCount').textContent = analyzedPhotos.length;
+            document.getElementById('faceCount').textContent = totalFaces;
+            document.getElementById('dominantColor').textContent = dominantColor !== '未知' ? dominantColor : '未知';
+        }
+    </script>
+</body>
+</html>
+    <script id="html_badge_script1">
+        window.__genspark_remove_badge_link = "https://www.genspark.ai/api/html_badge/" +
+            "remove_badge?token=To%2FBnjzloZ3UfQdcSaYfDkPLw82ApCL%2FYN289U6CjfGGAK2lrNDrA6C7FUjK5ag7pMIhwaQBXX4Qze0gJng9HSNAKPSDLLU5W83%2FtgdI5Jpj9mCxsE8r%2BbRT2NzsNwsbq5WbO1iAOG3gIp2qWlVoizYtw2RCLnN86PcmT3JaV1%2BSCNOyPGRKDN%2BhBQUg5%2B518i22a%2FARwNXZfnIfP8RraSvIxdjZ6VZoJvRkBkyzZvVmZAajoTZu84%2B1pkWloKPJeWkly4d8vTeYt%2BfCBeZ2zN6GHjF61Wd6d%2BOUZxm0qWOa3CVtNGi3opZzi4sRZxPZAqr1JbsEHb0xTNXccLm%2FCBm12EQwXkpEfIHp7dQTZyIFb1osrOQmJMCrMtUVUzEf0FgnDolF%2BNlHC%2BXlrFnv7ptU0pBLrFEZfhI3X1Hl2HcmsRlhKjT65tFXHyqoEyqD66Cr4aoIVf%2BC7pZgBvpzC4Qs805mNRJZX0miKiF%2FgLIJKnctUGRXz754cqBBG5SqVZPdIkl%2FNKLgwgziJC2t%2BA%3D%3D";
+        window.__genspark_locale = "zh-CN";
+        window.__genspark_token = "To/BnjzloZ3UfQdcSaYfDkPLw82ApCL/YN289U6CjfGGAK2lrNDrA6C7FUjK5ag7pMIhwaQBXX4Qze0gJng9HSNAKPSDLLU5W83/tgdI5Jpj9mCxsE8r+bRT2NzsNwsbq5WbO1iAOG3gIp2qWlVoizYtw2RCLnN86PcmT3JaV1+SCNOyPGRKDN+hBQUg5+518i22a/ARwNXZfnIfP8RraSvIxdjZ6VZoJvRkBkyzZvVmZAajoTZu84+1pkWloKPJeWkly4d8vTeYt+fCBeZ2zN6GHjF61Wd6d+OUZxm0qWOa3CVtNGi3opZzi4sRZxPZAqr1JbsEHb0xTNXccLm/CBm12EQwXkpEfIHp7dQTZyIFb1osrOQmJMCrMtUVUzEf0FgnDolF+NlHC+XlrFnv7ptU0pBLrFEZfhI3X1Hl2HcmsRlhKjT65tFXHyqoEyqD66Cr4aoIVf+C7pZgBvpzC4Qs805mNRJZX0miKiF/gLIJKnctUGRXz754cqBBG5SqVZPdIkl/NKLgwgziJC2t+A==";
+    </script>
+    
+    <script id="html_notice_dialog_script" src="https://www.genspark.ai/notice_dialog.js"></script>
+    
