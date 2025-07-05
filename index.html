@@ -7,6 +7,9 @@
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
     <style>
         * {
             font-family: 'Inter', sans-serif;
@@ -63,11 +66,30 @@
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.3);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
         }
 
         .tag-item:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .tag-item.removable {
+            position: relative;
+            padding-right: 2rem;
+        }
+
+        .tag-item .remove-tag {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            opacity: 0.7;
+        }
+
+        .tag-item .remove-tag:hover {
+            opacity: 1;
         }
 
         .image-card {
@@ -388,6 +410,87 @@
             opacity: 1;
         }
 
+        /* 备注框样式 */
+        .notes-section {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .notes-textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.75rem;
+            border: 1px solid #E5E7EB;
+            border-radius: 0.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: #1F2937;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .notes-textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* 自定义标签输入框样式 */
+        .custom-tags-section {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .tag-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E5E7EB;
+            border-radius: 0.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: #1F2937;
+            font-family: inherit;
+        }
+
+        .tag-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .custom-tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        /* 性能优化相关样式 */
+        .lazy-image {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .lazy-image.loaded {
+            opacity: 1;
+        }
+
+        .preload-indicator {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(16, 185, 129, 0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
         @media (max-width: 768px) {
             .image-grid {
                 grid-template-columns: 1fr;
@@ -452,7 +555,7 @@
                         <i class="fas fa-brain mr-2"></i>AI智能相册
                     </h1>
                     <span class="ai-badge px-3 py-1 rounded-full text-sm">
-                        <i class="fas fa-robot mr-1"></i>智能分析
+                        <i class="fas fa-robot mr-1"></i>TensorFlow.js
                     </span>
                 </div>
                 <div class="flex items-center space-x-3">
@@ -515,7 +618,13 @@
         <div id="gallery-tab" class="tab-content">
             <div id="loading-indicator" class="glass-effect rounded-xl p-8 text-center mb-6">
                 <div class="loading-spinner mx-auto mb-4"></div>
-                <p class="high-contrast-text text-lg font-medium">正在加载图片...</p>
+                <p class="high-contrast-text text-lg font-medium">正在加载TensorFlow.js模型...</p>
+                <div id="model-loading-progress" class="mt-4">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm high-contrast-text mt-2">模型加载中...</p>
+                </div>
             </div>
 
             <div id="gallery-stats" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" style="display: none;">
@@ -584,6 +693,28 @@
                                 <input type="checkbox" id="quality-analysis" class="w-4 h-4 text-blue-600 rounded" checked>
                                 <span class="high-contrast-text">图片质量分析</span>
                             </label>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" id="tensorflow-analysis" class="w-4 h-4 text-blue-600 rounded" checked>
+                                <span class="high-contrast-text">使用TensorFlow.js分析</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="high-contrast-text text-lg font-semibold mb-4">性能设置</h3>
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" id="image-compression" class="w-4 h-4 text-blue-600 rounded" checked>
+                                <span class="high-contrast-text">图片压缩</span>
+                            </label>
+                            <label class="flex items-center space-x-3">
+                                <input type="checkbox" id="lazy-loading" class="w-4 h-4 text-blue-600 rounded" checked>
+                                <span class="high-contrast-text">懒加载</span>
+                            </label>
+                            <div class="flex items-center space-x-3">
+                                <span class="high-contrast-text">预加载数量:</span>
+                                <input type="range" id="preload-count" min="1" max="10" value="3" class="flex-1">
+                                <span id="preload-count-value" class="high-contrast-text font-semibold">3</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -633,6 +764,36 @@
                             </h3>
                             <div id="modal-tags" class="flex flex-wrap gap-2"></div>
                         </div>
+
+                        <!-- 新增：备注框 -->
+                        <div class="notes-section">
+                            <h3 class="high-contrast-text text-lg font-semibold mb-3">
+                                <i class="fas fa-sticky-note mr-2"></i>备注
+                            </h3>
+                            <textarea id="image-notes" class="notes-textarea" placeholder="为这张图片添加备注..."></textarea>
+                            <div class="flex gap-2 mt-3">
+                                <button onclick="saveImageNotes()" class="theme-btn px-4 py-2 rounded-lg text-sm">
+                                    <i class="fas fa-save mr-1"></i>保存备注
+                                </button>
+                                <button onclick="clearImageNotes()" class="theme-btn px-4 py-2 rounded-lg text-sm">
+                                    <i class="fas fa-trash mr-1"></i>清除
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 新增：自定义标签 -->
+                        <div class="custom-tags-section">
+                            <h3 class="high-contrast-text text-lg font-semibold mb-3">
+                                <i class="fas fa-tag mr-2"></i>自定义标签
+                            </h3>
+                            <div class="flex gap-2 mb-3">
+                                <input type="text" id="custom-tag-input" class="tag-input flex-1" placeholder="输入自定义标签..." onkeypress="handleTagInputKeyPress(event)">
+                                <button onclick="addCustomTag()" class="theme-btn px-4 py-2 rounded-lg text-sm">
+                                    <i class="fas fa-plus mr-1"></i>添加
+                                </button>
+                            </div>
+                            <div id="custom-tags-container" class="custom-tags-container"></div>
+                        </div>
                         
                         <div class="flex gap-3">
                             <button onclick="downloadCurrentImage()" class="theme-btn px-6 py-3 rounded-lg">
@@ -679,19 +840,103 @@
         let currentImages = [];
         let currentImageIndex = 0;
         let aiAnalysisResults = new Map();
+        let imageNotes = new Map();
+        let customTags = new Map();
         let isAdmin = false;
         let analysisQueue = [];
         let isAnalyzing = false;
         let searchSuggestions = [];
         let preloadedImages = new Set();
+        let tensorflowModels = {};
+        let isModelLoaded = false;
 
-        // 增强的AI分析引擎
+        // TensorFlow.js 模型管理器
+        class TensorFlowModelManager {
+            constructor() {
+                this.models = {};
+                this.loadingProgress = 0;
+            }
+
+            async loadModels() {
+                try {
+                    this.updateProgress(10, '正在加载MobileNet模型...');
+                    this.models.mobilenet = await mobilenet.load();
+                    
+                    this.updateProgress(60, '正在加载COCO-SSD模型...');
+                    this.models.cocoSsd = await cocoSsd.load();
+                    
+                    this.updateProgress(100, '模型加载完成！');
+                    isModelLoaded = true;
+                    
+                    setTimeout(() => {
+                        document.getElementById('loading-indicator').style.display = 'none';
+                        loadImages();
+                    }, 1000);
+                    
+                } catch (error) {
+                    console.error('模型加载失败:', error);
+                    this.updateProgress(0, '模型加载失败，使用基础分析');
+                    setTimeout(() => {
+                        document.getElementById('loading-indicator').style.display = 'none';
+                        loadImages();
+                    }, 2000);
+                }
+            }
+
+            updateProgress(percentage, message) {
+                const progressBar = document.getElementById('progress-bar');
+                const progressText = document.querySelector('#model-loading-progress p');
+                
+                if (progressBar) {
+                    progressBar.style.width = `${percentage}%`;
+                }
+                if (progressText) {
+                    progressText.textContent = message;
+                }
+            }
+
+            async classifyImage(imageElement) {
+                if (!this.models.mobilenet) return [];
+                
+                try {
+                    const predictions = await this.models.mobilenet.classify(imageElement);
+                    return predictions.map(pred => ({
+                        label: pred.className,
+                        confidence: pred.probability,
+                        category: 'classification'
+                    }));
+                } catch (error) {
+                    console.error('图像分类失败:', error);
+                    return [];
+                }
+            }
+
+            async detectObjects(imageElement) {
+                if (!this.models.cocoSsd) return [];
+                
+                try {
+                    const predictions = await this.models.cocoSsd.detect(imageElement);
+                    return predictions.map(pred => ({
+                        label: pred.class,
+                        confidence: pred.score,
+                        category: 'detection',
+                        bbox: pred.bbox
+                    }));
+                } catch (error) {
+                    console.error('物体检测失败:', error);
+                    return [];
+                }
+            }
+        }
+
+        // 增强的AI分析引擎（集成TensorFlow.js）
         class EnhancedAIEngine {
             constructor() {
                 this.analysisCache = new Map();
                 this.analysisQueue = [];
                 this.isProcessing = false;
-                this.workers = 2; // 并发分析数
+                this.workers = 2;
+                this.tensorflowManager = new TensorFlowModelManager();
             }
 
             async analyzeImage(imageFile, imageElement, priority = 'normal') {
@@ -719,7 +964,6 @@
                 
                 this.isProcessing = true;
                 
-                // 按优先级排序
                 this.analysisQueue.sort((a, b) => {
                     const priorityOrder = { 'high': 0, 'normal': 1, 'low': 2 };
                     return priorityOrder[a.priority] - priorityOrder[b.priority];
@@ -750,10 +994,43 @@
             }
 
             async performAnalysis(imageFile, imageElement) {
+                const settings = getSettings();
+                let analysis = {
+                    objects: [],
+                    scenes: [],
+                    emotions: [],
+                    colors: [],
+                    quality: null,
+                    composition: null,
+                    smartTags: [],
+                    confidence: 0,
+                    timestamp: Date.now(),
+                    method: 'basic'
+                };
+
+                // 使用TensorFlow.js进行分析
+                if (settings.tensorflowAnalysis && isModelLoaded) {
+                    try {
+                        analysis.method = 'tensorflow';
+                        
+                        // 图像分类
+                        const classifications = await this.tensorflowManager.classifyImage(imageElement);
+                        analysis.objects = analysis.objects.concat(classifications);
+                        
+                        // 物体检测
+                        const detections = await this.tensorflowManager.detectObjects(imageElement);
+                        analysis.objects = analysis.objects.concat(detections);
+                        
+                    } catch (error) {
+                        console.error('TensorFlow.js分析失败，回退到基础分析:', error);
+                        analysis.method = 'basic_fallback';
+                    }
+                }
+
+                // 基础分析（颜色、质量等）
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
-                // 自适应画布尺寸
                 const maxSize = 512;
                 let { width, height } = imageElement;
                 
@@ -769,17 +1046,18 @@
 
                 const imageData = ctx.getImageData(0, 0, width, height);
                 
-                const analysis = {
-                    objects: await this.detectObjects(imageData),
-                    scenes: await this.classifyScene(imageData),
-                    emotions: await this.analyzeEmotions(imageData),
-                    colors: await this.extractColors(imageData),
-                    quality: await this.analyzeQuality(imageData),
-                    composition: await this.analyzeComposition(imageData),
-                    smartTags: [],
-                    confidence: 0,
-                    timestamp: Date.now()
-                };
+                // 基础分析
+                if (analysis.objects.length === 0) {
+                    analysis.objects = await this.detectObjectsBasic(imageData);
+                }
+                analysis.scenes = await this.classifyScene(imageData);
+                analysis.emotions = await this.analyzeEmotions(imageData);
+                analysis.colors = await this.extractColors(imageData);
+                
+                if (settings.qualityAnalysis) {
+                    analysis.quality = await this.analyzeQuality(imageData);
+                    analysis.composition = await this.analyzeComposition(imageData);
+                }
 
                 analysis.smartTags = this.generateSmartTags(analysis);
                 analysis.confidence = this.calculateOverallConfidence(analysis);
@@ -787,17 +1065,14 @@
                 return analysis;
             }
 
-            async detectObjects(imageData) {
+            async detectObjectsBasic(imageData) {
                 const data = imageData.data;
                 const width = imageData.width;
                 const height = imageData.height;
                 
                 const objects = [];
-                
-                // 分析颜色分布
                 const colorStats = this.analyzeColorDistribution(data);
                 
-                // 基于颜色和纹理的物体检测
                 if (colorStats.skin > 0.15) {
                     objects.push({ 
                         label: '人物', 
@@ -831,7 +1106,6 @@
                     });
                 }
 
-                // 边缘检测
                 const edgeInfo = this.detectEdges(data, width, height);
                 if (edgeInfo.strongEdges > 0.3) {
                     objects.push({ 
@@ -844,6 +1118,7 @@
                 return objects;
             }
 
+            // 其他分析方法保持不变...
             async classifyScene(imageData) {
                 const data = imageData.data;
                 const brightness = this.calculateBrightness(data);
@@ -852,7 +1127,6 @@
                 
                 const scenes = [];
                 
-                // 场景分类规则
                 if (brightness > 150 && colorComplexity > 0.6) {
                     scenes.push({ label: '户外风景', confidence: 0.90 });
                 }
@@ -923,7 +1197,6 @@
                 const data = imageData.data;
                 const colorCounts = {};
                 
-                // 降采样提高性能
                 for (let i = 0; i < data.length; i += 16) {
                     const r = Math.round(data[i] / 32) * 32;
                     const g = Math.round(data[i + 1] / 32) * 32;
@@ -1124,7 +1397,6 @@
             generateSmartTags(analysis) {
                 const tags = new Set();
 
-                // 基于检测结果的标签
                 analysis.objects.forEach(obj => {
                     if (obj.confidence > 0.7) {
                         tags.add(obj.label);
@@ -1144,7 +1416,6 @@
                     }
                 });
 
-                // 基于颜色的标签
                 analysis.colors.forEach(color => {
                     if (color.percentage > 15) {
                         tags.add(color.name);
@@ -1153,10 +1424,9 @@
                     }
                 });
 
-                // 基于质量的标签
-                if (analysis.quality.overall > 0.8) {
+                if (analysis.quality && analysis.quality.overall > 0.8) {
                     tags.add('高质量');
-                } else if (analysis.quality.overall < 0.5) {
+                } else if (analysis.quality && analysis.quality.overall < 0.5) {
                     tags.add('低质量');
                 }
 
@@ -1210,12 +1480,12 @@
                     composition: { symmetry: 0.5, ruleOfThirds: 0.5, balance: 0.5 },
                     smartTags: ['图片'],
                     confidence: 0.5,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    method: 'default'
                 };
             }
 
             updateImageAnalysis(cacheKey, analysis) {
-                // 更新界面中对应的图片分析结果
                 const imageCard = document.querySelector(`[data-cache-key="${cacheKey}"]`);
                 if (imageCard) {
                     updateImageCardAnalysis(imageCard, analysis);
@@ -1223,12 +1493,14 @@
             }
         }
 
-        // 图片加载器
+        // 智能图片加载器（优化版）
         class SmartImageLoader {
             constructor() {
                 this.aiEngine = new EnhancedAIEngine();
                 this.loadedImages = new Set();
                 this.preloadQueue = [];
+                this.compressionCanvas = document.createElement('canvas');
+                this.compressionCtx = this.compressionCanvas.getContext('2d');
             }
 
             async loadAllImages() {
@@ -1396,18 +1668,54 @@
                 });
             }
 
-            // 智能预加载
-            async preloadImage(imageUrl) {
+            // 智能预加载（优化版）
+            async preloadImage(imageUrl, priority = 'low') {
                 if (this.loadedImages.has(imageUrl)) return;
 
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.onload = () => {
                         this.loadedImages.add(imageUrl);
-                        resolve(img);
+                        
+                        // 可选的图片压缩
+                        const settings = getSettings();
+                        if (settings.imageCompression) {
+                            this.compressImage(img).then(resolve);
+                        } else {
+                            resolve(img);
+                        }
                     };
                     img.onerror = () => resolve(null);
                     img.src = imageUrl;
+                });
+            }
+
+            // 图片压缩
+            async compressImage(img, quality = 0.8) {
+                const canvas = this.compressionCanvas;
+                const ctx = this.compressionCtx;
+                
+                const maxWidth = 800;
+                const maxHeight = 600;
+                
+                let { width, height } = img;
+                
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width *= ratio;
+                    height *= ratio;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                return new Promise(resolve => {
+                    canvas.toBlob(blob => {
+                        const compressedImg = new Image();
+                        compressedImg.onload = () => resolve(compressedImg);
+                        compressedImg.src = URL.createObjectURL(blob);
+                    }, 'image/jpeg', quality);
                 });
             }
         }
@@ -1419,7 +1727,7 @@
             console.log('🚀 初始化AI智能相册...');
             
             initializeUI();
-            await loadImages();
+            await imageLoader.aiEngine.tensorflowManager.loadModels();
             bindEvents();
             
             console.log('✅ 初始化完成');
@@ -1507,7 +1815,6 @@
             const noImages = document.getElementById('no-images');
             const galleryStats = document.getElementById('gallery-stats');
 
-            loadingIndicator.style.display = 'block';
             imagesGrid.style.display = 'none';
             noImages.style.display = 'none';
             galleryStats.style.display = 'none';
@@ -1536,6 +1843,8 @@
             const grid = document.getElementById('images-grid');
             grid.innerHTML = '';
 
+            const settings = getSettings();
+            
             // 创建观察器用于懒加载
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
@@ -1543,7 +1852,9 @@
                         const img = entry.target.querySelector('img');
                         const cacheKey = img.dataset.cacheKey;
                         
-                        loadImageWithAnalysis(img, cacheKey);
+                        if (settings.lazyLoading) {
+                            loadImageWithAnalysis(img, cacheKey);
+                        }
                         observer.unobserve(entry.target);
                     }
                 });
@@ -1555,7 +1866,15 @@
             images.forEach((image, index) => {
                 const imageCard = createImageCard(image, index);
                 grid.appendChild(imageCard);
-                observer.observe(imageCard);
+                
+                if (settings.lazyLoading) {
+                    observer.observe(imageCard);
+                } else {
+                    // 立即加载
+                    const img = imageCard.querySelector('img');
+                    const cacheKey = img.dataset.cacheKey;
+                    loadImageWithAnalysis(img, cacheKey);
+                }
             });
         }
 
@@ -1565,13 +1884,16 @@
             card.dataset.cacheKey = image.id;
             card.onclick = () => openImageModal(index);
 
+            const settings = getSettings();
+            const lazyClass = settings.lazyLoading ? 'lazy-image' : '';
+
             card.innerHTML = `
                 <div class="image-container">
                     <img data-src="${image.url}" 
                          data-cache-key="${image.id}"
-                         src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23666'%3E加载中...%3C/text%3E%3C/svg%3E"
+                         src="${settings.lazyLoading ? 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 400 300\'%3E%3Crect width=\'400\' height=\'300\' fill=\'%23f0f0f0\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' dominant-baseline=\'middle\' text-anchor=\'middle\' fill=\'%23666\'%3E加载中...%3C/text%3E%3C/svg%3E' : image.url}"
                          alt="${image.name}" 
-                         class="smart-crop">
+                         class="smart-crop ${lazyClass}">
                     <div class="image-loading">
                         <div class="loading-spinner"></div>
                     </div>
@@ -1586,6 +1908,7 @@
                         <i class="fas fa-star mr-1"></i>
                         <span class="quality-text">分析中</span>
                     </div>
+                    ${preloadedImages.has(image.url) ? '<div class="preload-indicator">已预载</div>' : ''}
                 </div>
                 <div class="p-4">
                     <h3 class="high-contrast-text font-semibold text-lg mb-2 truncate">${image.name}</h3>
@@ -1621,6 +1944,7 @@
             // 加载图片
             imgElement.onload = async () => {
                 loadingIndicator.style.display = 'none';
+                imgElement.classList.add('loaded');
                 
                 // 智能预加载相邻图片
                 preloadNearbyImages(cacheKey);
@@ -1646,7 +1970,9 @@
                 analysisOverlay.style.display = 'none';
             };
 
-            imgElement.src = imgElement.dataset.src;
+            if (imgElement.dataset.src && imgElement.src !== imgElement.dataset.src) {
+                imgElement.src = imgElement.dataset.src;
+            }
         }
 
         function shouldAnalyzeImage(cacheKey) {
@@ -1659,13 +1985,15 @@
             if (!settings.smartPreload) return;
 
             const currentIndex = currentImages.findIndex(img => img.id === currentCacheKey);
-            const preloadRange = 2; // 预加载前后2张图片
+            const preloadRange = settings.preloadCount || 3;
 
             for (let i = Math.max(0, currentIndex - preloadRange); 
                  i <= Math.min(currentImages.length - 1, currentIndex + preloadRange); 
                  i++) {
                 if (i !== currentIndex) {
-                    imageLoader.preloadImage(currentImages[i].url);
+                    imageLoader.preloadImage(currentImages[i].url).then(() => {
+                        preloadedImages.add(currentImages[i].url);
+                    });
                 }
             }
         }
@@ -1697,10 +2025,13 @@
             }
 
             // 更新AI信息
+            const methodBadge = analysis.method === 'tensorflow' ? 
+                '<span class="text-xs bg-green-500 text-white px-1 rounded">TF</span>' : '';
+            
             aiInfoContainer.innerHTML = `
                 <div class="space-y-1">
                     <div class="text-xs high-contrast-text opacity-75">
-                        <i class="fas fa-brain mr-1"></i>AI: ${Math.round(analysis.confidence * 100)}%
+                        <i class="fas fa-brain mr-1"></i>AI: ${Math.round(analysis.confidence * 100)}% ${methodBadge}
                     </div>
                     ${analysis.objects.length > 0 ? `
                         <div class="text-xs high-contrast-text opacity-75">
@@ -1748,6 +2079,8 @@
             updateModalImageInfo(image);
             updateModalAIAnalysis(analysis);
             updateModalTags(analysis ? analysis.smartTags : []);
+            loadImageNotes(image.id);
+            loadCustomTags(image.id);
 
             document.getElementById('image-detail-modal').classList.remove('hidden');
             
@@ -1792,11 +2125,15 @@
                 return;
             }
 
+            const methodBadge = analysis.method === 'tensorflow' ? 
+                '<span class="bg-green-500 text-white px-2 py-1 rounded text-xs ml-2">TensorFlow.js</span>' : 
+                '<span class="bg-blue-500 text-white px-2 py-1 rounded text-xs ml-2">基础分析</span>';
+
             container.innerHTML = `
                 <div class="space-y-4">
                     <div class="ai-analysis-item">
                         <div class="flex items-center justify-between mb-2">
-                            <span class="high-contrast-text font-semibold">整体置信度</span>
+                            <span class="high-contrast-text font-semibold">整体置信度${methodBadge}</span>
                             <span class="high-contrast-text font-bold">${Math.round(analysis.confidence * 100)}%</span>
                         </div>
                         <div class="confidence-bar">
@@ -1814,7 +2151,11 @@
                                 ${analysis.objects.map(obj => `
                                     <div class="flex items-center justify-between">
                                         <span class="high-contrast-text">${obj.label}</span>
-                                        <span class="text-sm high-contrast-text opacity-75">${Math.round(obj.confidence * 100)}%</span>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-sm high-contrast-text opacity-75">${Math.round(obj.confidence * 100)}%</span>
+                                            ${obj.category === 'detection' ? '<span class="bg-green-500 text-white px-1 rounded text-xs">检测</span>' : ''}
+                                            ${obj.category === 'classification' ? '<span class="bg-blue-500 text-white px-1 rounded text-xs">分类</span>' : ''}
+                                        </div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -1867,6 +2208,133 @@
             container.innerHTML = tags.map(tag => `
                 <span class="tag-item px-3 py-1 rounded-lg text-sm">${tag}</span>
             `).join('');
+        }
+
+        // 备注功能
+        function loadImageNotes(imageId) {
+            const notes = imageNotes.get(imageId) || '';
+            document.getElementById('image-notes').value = notes;
+        }
+
+        function saveImageNotes() {
+            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
+                const imageId = currentImages[currentImageIndex].id;
+                const notes = document.getElementById('image-notes').value;
+                imageNotes.set(imageId, notes);
+                
+                // 保存到localStorage
+                const allNotes = {};
+                imageNotes.forEach((value, key) => {
+                    allNotes[key] = value;
+                });
+                localStorage.setItem('image_notes', JSON.stringify(allNotes));
+                
+                showTooltip('备注已保存');
+            }
+        }
+
+        function clearImageNotes() {
+            document.getElementById('image-notes').value = '';
+            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
+                const imageId = currentImages[currentImageIndex].id;
+                imageNotes.delete(imageId);
+                
+                // 更新localStorage
+                const allNotes = {};
+                imageNotes.forEach((value, key) => {
+                    allNotes[key] = value;
+                });
+                localStorage.setItem('image_notes', JSON.stringify(allNotes));
+                
+                showTooltip('备注已清除');
+            }
+        }
+
+        // 自定义标签功能
+        function loadCustomTags(imageId) {
+            const tags = customTags.get(imageId) || [];
+            updateCustomTagsDisplay(tags);
+        }
+
+        function addCustomTag() {
+            const input = document.getElementById('custom-tag-input');
+            const tag = input.value.trim();
+            
+            if (tag && currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
+                const imageId = currentImages[currentImageIndex].id;
+                const existingTags = customTags.get(imageId) || [];
+                
+                if (!existingTags.includes(tag)) {
+                    existingTags.push(tag);
+                    customTags.set(imageId, existingTags);
+                    updateCustomTagsDisplay(existingTags);
+                    saveCustomTags();
+                    input.value = '';
+                    showTooltip('标签已添加');
+                } else {
+                    showTooltip('标签已存在');
+                }
+            }
+        }
+
+        function removeCustomTag(tag) {
+            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
+                const imageId = currentImages[currentImageIndex].id;
+                const existingTags = customTags.get(imageId) || [];
+                const updatedTags = existingTags.filter(t => t !== tag);
+                
+                customTags.set(imageId, updatedTags);
+                updateCustomTagsDisplay(updatedTags);
+                saveCustomTags();
+                showTooltip('标签已删除');
+            }
+        }
+
+        function updateCustomTagsDisplay(tags) {
+            const container = document.getElementById('custom-tags-container');
+            container.innerHTML = tags.map(tag => `
+                <span class="tag-item removable px-3 py-1 rounded-lg text-sm">
+                    ${tag}
+                    <span class="remove-tag" onclick="removeCustomTag('${tag}')">
+                        <i class="fas fa-times"></i>
+                    </span>
+                </span>
+            `).join('');
+        }
+
+        function saveCustomTags() {
+            const allTags = {};
+            customTags.forEach((value, key) => {
+                allTags[key] = value;
+            });
+            localStorage.setItem('custom_tags', JSON.stringify(allTags));
+        }
+
+        function handleTagInputKeyPress(event) {
+            if (event.key === 'Enter') {
+                addCustomTag();
+            }
+        }
+
+        // 初始化时加载保存的数据
+        function loadSavedData() {
+            // 加载备注
+            const savedNotes = localStorage.getItem('image_notes');
+            if (savedNotes) {
+                const notesData = JSON.parse(savedNotes);
+                Object.entries(notesData).forEach(([key, value]) => {
+                    imageNotes.set(key, value);
+                });
+            }
+            
+            // 加载自定义标签
+            const savedTags = localStorage.getItem('custom_tags');
+            if (savedTags) {
+                const tagsData = JSON.parse(savedTags);
+                Object.entries(tagsData).forEach(([key, value]) => {
+                    customTags.set(key, value);
+                });
+            }
         }
 
         function navigateImage(direction) {
@@ -1995,10 +2463,18 @@
                 objects: {},
                 scenes: {},
                 emotions: {},
-                colors: {}
+                colors: {},
+                methods: { tensorflow: 0, basic: 0 }
             };
 
             aiAnalysisResults.forEach(analysis => {
+                // 统计分析方法
+                if (analysis.method === 'tensorflow') {
+                    stats.methods.tensorflow++;
+                } else {
+                    stats.methods.basic++;
+                }
+                
                 analysis.objects.forEach(obj => {
                     stats.objects[obj.label] = (stats.objects[obj.label] || 0) + 1;
                 });
@@ -2014,7 +2490,23 @@
             });
 
             container.innerHTML = `
-                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                    <div class="glass-effect rounded-xl p-6">
+                        <h3 class="high-contrast-text text-lg font-semibold mb-4">
+                            <i class="fas fa-cogs mr-2"></i>分析方法
+                        </h3>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <span class="high-contrast-text">TensorFlow.js</span>
+                                <span class="bg-green-500 text-white px-2 py-1 rounded text-sm">${stats.methods.tensorflow}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="high-contrast-text">基础分析</span>
+                                <span class="bg-blue-500 text-white px-2 py-1 rounded text-sm">${stats.methods.basic}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="glass-effect rounded-xl p-6">
                         <h3 class="high-contrast-text text-lg font-semibold mb-4">
                             <i class="fas fa-fire mr-2"></i>热门物体
@@ -2043,23 +2535,6 @@
                                 .map(([scene, count]) => `
                                     <div class="flex justify-between items-center">
                                         <span class="high-contrast-text">${scene}</span>
-                                        <span class="ai-badge px-2 py-1 rounded text-sm">${count}</span>
-                                    </div>
-                                `).join('')}
-                        </div>
-                    </div>
-                    
-                    <div class="glass-effect rounded-xl p-6">
-                        <h3 class="high-contrast-text text-lg font-semibold mb-4">
-                            <i class="fas fa-heart mr-2"></i>情感分布
-                        </h3>
-                        <div class="space-y-2">
-                            ${Object.entries(stats.emotions)
-                                .sort(([,a], [,b]) => b - a)
-                                .slice(0, 5)
-                                .map(([emotion, count]) => `
-                                    <div class="flex justify-between items-center">
-                                        <span class="high-contrast-text">${emotion}</span>
                                         <span class="ai-badge px-2 py-1 rounded text-sm">${count}</span>
                                     </div>
                                 `).join('')}
@@ -2128,13 +2603,22 @@
             document.getElementById('auto-analyze').checked = settings.autoAnalyze;
             document.getElementById('smart-preload').checked = settings.smartPreload;
             document.getElementById('quality-analysis').checked = settings.qualityAnalysis;
+            document.getElementById('tensorflow-analysis').checked = settings.tensorflowAnalysis;
+            document.getElementById('image-compression').checked = settings.imageCompression;
+            document.getElementById('lazy-loading').checked = settings.lazyLoading;
+            document.getElementById('preload-count').value = settings.preloadCount;
+            document.getElementById('preload-count-value').textContent = settings.preloadCount;
         }
 
         function getSettings() {
             const defaultSettings = {
                 autoAnalyze: false,
                 smartPreload: true,
-                qualityAnalysis: true
+                qualityAnalysis: true,
+                tensorflowAnalysis: true,
+                imageCompression: true,
+                lazyLoading: true,
+                preloadCount: 3
             };
             
             return {
@@ -2147,7 +2631,11 @@
             const settings = {
                 autoAnalyze: document.getElementById('auto-analyze').checked,
                 smartPreload: document.getElementById('smart-preload').checked,
-                qualityAnalysis: document.getElementById('quality-analysis').checked
+                qualityAnalysis: document.getElementById('quality-analysis').checked,
+                tensorflowAnalysis: document.getElementById('tensorflow-analysis').checked,
+                imageCompression: document.getElementById('image-compression').checked,
+                lazyLoading: document.getElementById('lazy-loading').checked,
+                preloadCount: parseInt(document.getElementById('preload-count').value)
             };
             
             localStorage.setItem('gallery_settings', JSON.stringify(settings));
@@ -2161,6 +2649,11 @@
                 analysis.smartTags.forEach(tag => tags.add(tag));
             });
 
+            // 添加自定义标签
+            customTags.forEach(tagList => {
+                tagList.forEach(tag => tags.add(tag));
+            });
+
             tagFilter.innerHTML = '<option value="">所有标签</option>' + 
                 Array.from(tags).sort().map(tag => `<option value="${tag}">${tag}</option>`).join('');
         }
@@ -2170,6 +2663,8 @@
             const tagFilter = document.getElementById('tag-filter');
             const sortOption = document.getElementById('sort-option');
             const searchSuggestions = document.getElementById('search-suggestions');
+            const preloadCountSlider = document.getElementById('preload-count');
+            const preloadCountValue = document.getElementById('preload-count-value');
 
             // 搜索功能
             searchInput.addEventListener('input', debounce((e) => {
@@ -2200,7 +2695,9 @@
                 const filteredImages = selectedTag ? 
                     currentImages.filter(image => {
                         const analysis = aiAnalysisResults.get(image.id);
-                        return analysis && analysis.smartTags.includes(selectedTag);
+                        const customImageTags = customTags.get(image.id) || [];
+                        return (analysis && analysis.smartTags.includes(selectedTag)) || 
+                               customImageTags.includes(selectedTag);
                     }) : 
                     currentImages;
                 renderImages(filteredImages);
@@ -2233,6 +2730,11 @@
                 renderImages(sortedImages);
             });
 
+            // 预加载数量滑块
+            preloadCountSlider.addEventListener('input', (e) => {
+                preloadCountValue.textContent = e.target.value;
+            });
+
             // 键盘导航
             document.addEventListener('keydown', (event) => {
                 if (!document.getElementById('image-detail-modal').classList.contains('hidden')) {
@@ -2243,14 +2745,17 @@
             });
 
             // 设置变更监听
-            document.querySelectorAll('#settings-tab input[type="checkbox"]').forEach(checkbox => {
-                checkbox.addEventListener('change', saveSettings);
+            document.querySelectorAll('#settings-tab input[type="checkbox"], #settings-tab input[type="range"]').forEach(input => {
+                input.addEventListener('change', saveSettings);
             });
 
             // 窗口大小变更时重新调整
             window.addEventListener('resize', debounce(() => {
                 adjustImageSize();
             }, 150));
+
+            // 加载保存的数据
+            loadSavedData();
         }
 
         function showSearchSuggestions(query) {
@@ -2283,9 +2788,18 @@
                 }
             });
 
-            // 从标签中提取建议
+            // 从AI标签中提取建议
             aiAnalysisResults.forEach(analysis => {
                 analysis.smartTags.forEach(tag => {
+                    if (tag.toLowerCase().includes(query)) {
+                        suggestions.add(tag);
+                    }
+                });
+            });
+
+            // 从自定义标签中提取建议
+            customTags.forEach(tagList => {
+                tagList.forEach(tag => {
                     if (tag.toLowerCase().includes(query)) {
                         suggestions.add(tag);
                     }
@@ -2304,8 +2818,13 @@
         function filterImages(query) {
             const filteredImages = currentImages.filter(image => {
                 const analysis = aiAnalysisResults.get(image.id);
+                const customImageTags = customTags.get(image.id) || [];
+                const notes = imageNotes.get(image.id) || '';
+                
                 return image.name.toLowerCase().includes(query) ||
-                       (analysis && analysis.smartTags.some(tag => tag.toLowerCase().includes(query)));
+                       (analysis && analysis.smartTags.some(tag => tag.toLowerCase().includes(query))) ||
+                       customImageTags.some(tag => tag.toLowerCase().includes(query)) ||
+                       notes.toLowerCase().includes(query);
             });
             renderImages(filteredImages);
         }
@@ -2358,3 +2877,4 @@
     </script>
 </body>
 </html>
+
