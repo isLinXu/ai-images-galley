@@ -410,7 +410,6 @@
             opacity: 1;
         }
 
-        /* 备注框样式 */
         .notes-section {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -437,7 +436,6 @@
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
-        /* 自定义标签输入框样式 */
         .custom-tags-section {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -469,7 +467,6 @@
             margin-top: 0.75rem;
         }
 
-        /* 性能优化相关样式 */
         .lazy-image {
             opacity: 0;
             transition: opacity 0.3s ease;
@@ -491,6 +488,19 @@
             font-weight: 600;
         }
 
+        #image-upload-section {
+            transition: all 0.3s ease;
+        }
+
+        #image-upload-input {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        #upload-status .loading-spinner {
+            display: inline-block;
+            vertical-align: middle;
+        }
+
         @media (max-width: 768px) {
             .image-grid {
                 grid-template-columns: 1fr;
@@ -507,7 +517,6 @@
             }
         }
 
-        /* PDF优化样式 */
         @media print {
             body {
                 background: white !important;
@@ -616,6 +625,26 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         <div id="gallery-tab" class="tab-content">
+            <div id="image-upload-section" class="glass-effect rounded-xl p-6 mb-6 hidden">
+                <h3 class="high-contrast-text text-lg font-semibold mb-4">
+                    <i class="fas fa-upload mr-2"></i>上传图片到GitHub
+                </h3>
+                <div class="flex flex-col gap-4">
+                    <input type="file" id="image-upload-input" accept="image/*" multiple
+                           class="px-4 py-3 rounded-lg border-2 border-gray-200 focus:border-blue-500 focus:outline-none high-contrast-text bg-white/90">
+                    <div class="flex gap-3">
+                        <button onclick="uploadImagesToGitHub()" class="admin-btn px-6 py-3 rounded-lg">
+                            <i class="fas fa-cloud-upload-alt mr-2"></i>上传
+                        </button>
+                        <div id="upload-status" class="text-sm high-contrast-text"></div>
+                    </div>
+                    <div class="flex items-center space-x-3 mt-3">
+                        <input type="checkbox" id="auto-refresh-after-upload" class="w-4 h-4 text-blue-600 rounded" checked>
+                        <span class="high-contrast-text">上传后自动刷新图库</span>
+                    </div>
+                </div>
+            </div>
+
             <div id="loading-indicator" class="glass-effect rounded-xl p-8 text-center mb-6">
                 <div class="loading-spinner mx-auto mb-4"></div>
                 <p class="high-contrast-text text-lg font-medium">正在加载TensorFlow.js模型...</p>
@@ -765,7 +794,6 @@
                             <div id="modal-tags" class="flex flex-wrap gap-2"></div>
                         </div>
 
-                        <!-- 新增：备注框 -->
                         <div class="notes-section">
                             <h3 class="high-contrast-text text-lg font-semibold mb-3">
                                 <i class="fas fa-sticky-note mr-2"></i>备注
@@ -781,7 +809,6 @@
                             </div>
                         </div>
 
-                        <!-- 新增：自定义标签 -->
                         <div class="custom-tags-section">
                             <h3 class="high-contrast-text text-lg font-semibold mb-3">
                                 <i class="fas fa-tag mr-2"></i>自定义标签
@@ -1118,7 +1145,6 @@
                 return objects;
             }
 
-            // 其他分析方法保持不变...
             async classifyScene(imageData) {
                 const data = imageData.data;
                 const brightness = this.calculateBrightness(data);
@@ -1252,7 +1278,6 @@
                 };
             }
 
-            // 辅助方法
             calculateBrightness(data) {
                 let sum = 0;
                 for (let i = 0; i < data.length; i += 4) {
@@ -1394,6 +1419,73 @@
                 return { strongEdges: strongEdges / total };
             }
 
+            calculateSymmetry(data, width, height) {
+                let symmetry = 0;
+                const halfWidth = Math.floor(width / 2);
+                
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < halfWidth; x++) {
+                        const leftIdx = (y * width + x) * 4;
+                        const rightIdx = (y * width + (width - x - 1)) * 4;
+                        
+                        const leftValue = (data[leftIdx] + data[leftIdx + 1] + data[leftIdx + 2]) / 3;
+                        const rightValue = (data[rightIdx] + data[rightIdx + 1] + data[rightIdx + 2]) / 3;
+                        
+                        symmetry += 1 - Math.abs(leftValue - rightValue) / 255;
+                    }
+                }
+                
+                return symmetry / (halfWidth * height);
+            }
+
+            analyzeRuleOfThirds(data, width, height) {
+                const thirdWidth = width / 3;
+                const thirdHeight = height / 3;
+                
+                let focalPoints = 0;
+                let totalPoints = 0;
+                
+                for (let y = thirdHeight; y < 2 * thirdHeight; y++) {
+                    for (let x = thirdWidth; x < 2 * thirdWidth; x++) {
+                        const idx = (y * width + x) * 4;
+                        const value = (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+                        
+                        if (value > 100) focalPoints++;
+                        totalPoints++;
+                    }
+                }
+                
+                return focalPoints / totalPoints;
+            }
+
+            calculateBalance(data, width, height) {
+                const quadrants = [
+                    { x: 0, y: 0, width: width / 2, height: height / 2 },
+                    { x: width / 2, y: 0, width: width / 2, height: height / 2 },
+                    { x: 0, y: height / 2, width: width / 2, height: height / 2 },
+                    { x: width / 2, y: height / 2, width: width / 2, height: height / 2 }
+                ];
+                
+                const brightnesses = quadrants.map(q => {
+                    let sum = 0;
+                    let count = 0;
+                    
+                    for (let y = q.y; y < q.y + q.height; y++) {
+                        for (let x = q.x; x < q.x + q.width; x++) {
+                            const idx = (y * width + x) * 4;
+                            sum += (data[idx] + data[idx + 1] + data[idx + 2]) / 3;
+                            count++;
+                        }
+                    }
+                    return sum / count;
+                });
+                
+                const mean = brightnesses.reduce((a, b) => a + b) / brightnesses.length;
+                const variance = brightnesses.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / brightnesses.length;
+                
+                return 1 - Math.min(Math.sqrt(variance) / 255, 1);
+            }
+
             generateSmartTags(analysis) {
                 const tags = new Set();
 
@@ -1435,9 +1527,9 @@
 
             calculateOverallConfidence(analysis) {
                 const confidences = [
-                    ...analysis.objects.map(o => o.confidence),
-                    ...analysis.scenes.map(s => s.confidence),
-                    ...analysis.emotions.map(e => e.confidence)
+                    ...analysis.objects.map(o => o.confidence || 0),
+                    ...analysis.scenes.map(s => s.confidence || 0),
+                    ...analysis.emotions.map(e => e.confidence || 0)
                 ];
                 
                 if (confidences.length === 0) return 0;
@@ -1445,7 +1537,7 @@
             }
 
             rgbToHex(r, g, b) {
-                return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+                return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
             }
 
             getColorName(r, g, b) {
@@ -1668,7 +1760,6 @@
                 });
             }
 
-            // 智能预加载（优化版）
             async preloadImage(imageUrl, priority = 'low') {
                 if (this.loadedImages.has(imageUrl)) return;
 
@@ -1677,7 +1768,6 @@
                     img.onload = () => {
                         this.loadedImages.add(imageUrl);
                         
-                        // 可选的图片压缩
                         const settings = getSettings();
                         if (settings.imageCompression) {
                             this.compressImage(img).then(resolve);
@@ -1690,7 +1780,6 @@
                 });
             }
 
-            // 图片压缩
             async compressImage(img, quality = 0.8) {
                 const canvas = this.compressionCanvas;
                 const ctx = this.compressionCtx;
@@ -1716,6 +1805,14 @@
                         compressedImg.onload = () => resolve(compressedImg);
                         compressedImg.src = URL.createObjectURL(blob);
                     }, 'image/jpeg', quality);
+                });
+            }
+
+            async imageToFile(img, fileName) {
+                return new Promise(resolve => {
+                    this.compressionCanvas.toBlob(blob => {
+                        resolve(new File([blob], fileName, { type: blob.type }));
+                    }, 'image/jpeg', 0.8);
                 });
             }
         }
@@ -1750,6 +1847,7 @@
         function setAdminMode(admin) {
             isAdmin = admin;
             const userStatus = document.getElementById('user-status');
+            const uploadSection = document.getElementById('image-upload-section');
 
             userStatus.innerHTML = admin ? `
                 <span class="high-contrast-text font-medium">管理员模式</span>
@@ -1762,6 +1860,8 @@
                     <i class="fas fa-sign-in-alt mr-2"></i>管理员登录
                 </button>
             `;
+            
+            uploadSection.classList.toggle('hidden', !admin);
         }
 
         function showAdminLogin() {
@@ -1776,7 +1876,7 @@
         async function handleAdminLogin() {
             const token = document.getElementById('github-token').value.trim();
             if (!token) {
-                alert('请输入GitHub Token');
+                showTooltip('请输入GitHub Token');
                 return;
             }
 
@@ -1789,6 +1889,18 @@
                 });
 
                 if (response.ok) {
+                    const scopesResponse = await fetch('https://api.github.com/rate_limit', {
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    const scopes = response.headers.get('X-OAuth-Scopes') || '';
+                    if (!scopes.includes('repo')) {
+                        showTooltip('Token缺少repo权限，请检查');
+                        return;
+                    }
+
                     localStorage.setItem('github_token', token);
                     localStorage.setItem('admin_status', 'true');
                     setAdminMode(true);
@@ -1809,797 +1921,170 @@
             showTooltip('已退出管理员模式');
         }
 
-        async function loadImages() {
-            const loadingIndicator = document.getElementById('loading-indicator');
-            const imagesGrid = document.getElementById('images-grid');
-            const noImages = document.getElementById('no-images');
-            const galleryStats = document.getElementById('gallery-stats');
-
-            imagesGrid.style.display = 'none';
-            noImages.style.display = 'none';
-            galleryStats.style.display = 'none';
-
-            try {
-                currentImages = await imageLoader.loadAllImages();
-                
-                if (currentImages.length > 0) {
-                    renderImages(currentImages);
-                    updateGalleryStats();
-                    imagesGrid.style.display = 'grid';
-                    galleryStats.style.display = 'grid';
-                    initializeTagFilter();
-                } else {
-                    noImages.style.display = 'block';
-                }
-            } catch (error) {
-                console.error('加载图片失败:', error);
-                noImages.style.display = 'block';
-            } finally {
-                loadingIndicator.style.display = 'none';
-            }
-        }
-
-        function renderImages(images) {
-            const grid = document.getElementById('images-grid');
-            grid.innerHTML = '';
-
-            const settings = getSettings();
+        async function uploadImagesToGitHub() {
+            const input = document.getElementById('image-upload-input');
+            const files = input.files;
+            const uploadStatus = document.getElementById('upload-status');
+            const token = localStorage.getItem('github_token');
             
-            // 创建观察器用于懒加载
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target.querySelector('img');
-                        const cacheKey = img.dataset.cacheKey;
-                        
-                        if (settings.lazyLoading) {
-                            loadImageWithAnalysis(img, cacheKey);
+            if (!isAdmin || !token) {
+                showTooltip('请先以管理员身份登录');
+                return;
+            }
+
+            if (files.length === 0) {
+                showTooltip('请选择至少一张图片');
+                return;
+            }
+
+            uploadStatus.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>正在上传...';
+            
+            const repo = 'isLinXu/ai-images-galley';
+            const pathPrefix = 'images/';
+            const newImages = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                updateUploadProgress(i + 1, files.length);
+                try {
+                    // 检查文件是否存在
+                    const checkResponse = await fetch(`https://api.github.com/repos/${repo}/contents/${pathPrefix}${file.name}`, {
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
                         }
-                        observer.unobserve(entry.target);
-                    }
-                });
-            }, { 
-                rootMargin: '100px',
-                threshold: 0.1
-            });
-
-            images.forEach((image, index) => {
-                const imageCard = createImageCard(image, index);
-                grid.appendChild(imageCard);
-                
-                if (settings.lazyLoading) {
-                    observer.observe(imageCard);
-                } else {
-                    // 立即加载
-                    const img = imageCard.querySelector('img');
-                    const cacheKey = img.dataset.cacheKey;
-                    loadImageWithAnalysis(img, cacheKey);
-                }
-            });
-        }
-
-        function createImageCard(image, index) {
-            const card = document.createElement('div');
-            card.className = 'image-card glass-effect rounded-xl overflow-hidden cursor-pointer slide-in';
-            card.dataset.cacheKey = image.id;
-            card.onclick = () => openImageModal(index);
-
-            const settings = getSettings();
-            const lazyClass = settings.lazyLoading ? 'lazy-image' : '';
-
-            card.innerHTML = `
-                <div class="image-container">
-                    <img data-src="${image.url}" 
-                         data-cache-key="${image.id}"
-                         src="${settings.lazyLoading ? 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 400 300\'%3E%3Crect width=\'400\' height=\'300\' fill=\'%23f0f0f0\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' dominant-baseline=\'middle\' text-anchor=\'middle\' fill=\'%23666\'%3E加载中...%3C/text%3E%3C/svg%3E' : image.url}"
-                         alt="${image.name}" 
-                         class="smart-crop ${lazyClass}">
-                    <div class="image-loading">
-                        <div class="loading-spinner"></div>
-                    </div>
-                    <div class="ai-analysis-overlay">
-                        <svg class="ai-progress-ring">
-                            <circle cx="30" cy="30" r="25"></circle>
-                            <circle cx="30" cy="30" r="25" class="progress"></circle>
-                        </svg>
-                        <p class="text-white font-semibold mt-2">AI分析中...</p>
-                    </div>
-                    <div class="quality-badge quality-medium" style="display: none;">
-                        <i class="fas fa-star mr-1"></i>
-                        <span class="quality-text">分析中</span>
-                    </div>
-                    ${preloadedImages.has(image.url) ? '<div class="preload-indicator">已预载</div>' : ''}
-                </div>
-                <div class="p-4">
-                    <h3 class="high-contrast-text font-semibold text-lg mb-2 truncate">${image.name}</h3>
-                    <div class="flex items-center justify-between text-sm mb-2">
-                        <span class="high-contrast-text opacity-75">${image.loadMethod}</span>
-                        <div class="flex items-center space-x-2">
-                            <button onclick="event.stopPropagation(); downloadImage('${image.url}', '${image.name}')" 
-                                    class="text-blue-500 hover:text-blue-700 transition-colors">
-                                <i class="fas fa-download"></i>
-                            </button>
-                            <button onclick="event.stopPropagation(); shareImage('${image.id}')" 
-                                    class="text-green-500 hover:text-green-700 transition-colors">
-                                <i class="fas fa-share"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="ai-info-container">
-                        <div class="text-xs high-contrast-text opacity-75">
-                            <i class="fas fa-brain mr-1"></i>AI分析中...
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            return card;
-        }
-
-        async function loadImageWithAnalysis(imgElement, cacheKey) {
-            const imageCard = imgElement.closest('.image-card');
-            const loadingIndicator = imageCard.querySelector('.image-loading');
-            const analysisOverlay = imageCard.querySelector('.ai-analysis-overlay');
-            
-            // 加载图片
-            imgElement.onload = async () => {
-                loadingIndicator.style.display = 'none';
-                imgElement.classList.add('loaded');
-                
-                // 智能预加载相邻图片
-                preloadNearbyImages(cacheKey);
-                
-                // 开始AI分析
-                if (shouldAnalyzeImage(cacheKey)) {
-                    analysisOverlay.style.display = 'flex';
-                    
-                    try {
-                        const analysis = await imageLoader.aiEngine.analyzeImage(null, imgElement, 'normal');
-                        aiAnalysisResults.set(cacheKey, analysis);
-                        updateImageCardAnalysis(imageCard, analysis);
-                        updateGalleryStats();
-                    } catch (error) {
-                        console.error('AI分析失败:', error);
-                        analysisOverlay.style.display = 'none';
-                    }
-                }
-            };
-
-            imgElement.onerror = () => {
-                loadingIndicator.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500"></i>';
-                analysisOverlay.style.display = 'none';
-            };
-
-            if (imgElement.dataset.src && imgElement.src !== imgElement.dataset.src) {
-                imgElement.src = imgElement.dataset.src;
-            }
-        }
-
-        function shouldAnalyzeImage(cacheKey) {
-            const settings = getSettings();
-            return settings.autoAnalyze || !aiAnalysisResults.has(cacheKey);
-        }
-
-        function preloadNearbyImages(currentCacheKey) {
-            const settings = getSettings();
-            if (!settings.smartPreload) return;
-
-            const currentIndex = currentImages.findIndex(img => img.id === currentCacheKey);
-            const preloadRange = settings.preloadCount || 3;
-
-            for (let i = Math.max(0, currentIndex - preloadRange); 
-                 i <= Math.min(currentImages.length - 1, currentIndex + preloadRange); 
-                 i++) {
-                if (i !== currentIndex) {
-                    imageLoader.preloadImage(currentImages[i].url).then(() => {
-                        preloadedImages.add(currentImages[i].url);
                     });
+                    if (checkResponse.ok) {
+                        if (!confirm(`文件 ${file.name} 已存在，是否覆盖？`)) {
+                            showTooltip(`已跳过 ${file.name}`);
+                            continue;
+                        }
+                    }
+
+                    // 可选：压缩图片
+                    let uploadFile = file;
+                    const settings = getSettings();
+                    if (settings.imageCompression) {
+                        const img = new Image();
+                        img.src = URL.createObjectURL(file);
+                        await new Promise(resolve => img.onload = resolve);
+                        const compressedImg = await imageLoader.compressImage(img);
+                        uploadFile = await imageLoader.imageToFile(compressedImg, file.name);
+                    }
+
+                    // 上传图片
+                    const base64Content = await fileToBase64(uploadFile);
+                    const response = await fetch(`https://api.github.com/repos/${repo}/contents/${pathPrefix}${file.name}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        body: JSON.stringify({
+                            message: `Upload ${file.name} via AI Gallery`,
+                            content: base64Content.split(',')[1] // 移除Base64前缀
+                        })
+                    });
+
+                    if (response.ok) {
+                        newImages.push({
+                            id: file.name,
+                            name: file.name,
+                            url: `images/${file.name}`,
+                            loadMethod: 'GitHub Upload'
+                        });
+                        showTooltip(`✅ ${file.name} 上传成功`);
+                    } else {
+                        const errorData = await response.json();
+                        showTooltip(`❌ 上传 ${file.name} 失败: ${errorData.message}`);
+                    }
+                } catch (error) {
+                    console.error(`上传 ${file.name} 失败:`, error);
+                    showTooltip(`❌ 上传 ${file.name} 失败: 网络错误`);
                 }
             }
-        }
 
-        function updateImageCardAnalysis(imageCard, analysis) {
-            const analysisOverlay = imageCard.querySelector('.ai-analysis-overlay');
-            const qualityBadge = imageCard.querySelector('.quality-badge');
-            const qualityText = imageCard.querySelector('.quality-text');
-            const aiInfoContainer = imageCard.querySelector('.ai-info-container');
+            uploadStatus.innerHTML = newImages.length > 0 
+                ? `<span class="text-green-500">成功上传 ${newImages.length}/${files.length} 张图片</span>`
+                : '<span class="text-red-500">上传失败</span>';
 
-            // 隐藏分析覆盖层
-            analysisOverlay.style.display = 'none';
-
-            // 更新质量徽章
-            if (analysis.quality && analysis.quality.overall) {
-                const quality = analysis.quality.overall;
-                qualityBadge.style.display = 'block';
-                
-                if (quality > 0.8) {
-                    qualityBadge.className = 'quality-badge quality-high';
-                    qualityText.textContent = '高质量';
-                } else if (quality > 0.6) {
-                    qualityBadge.className = 'quality-badge quality-medium';
-                    qualityText.textContent = '中等';
-                } else {
-                    qualityBadge.className = 'quality-badge quality-low';
-                    qualityText.textContent = '低质量';
-                }
-            }
-
-            // 更新AI信息
-            const methodBadge = analysis.method === 'tensorflow' ? 
-                '<span class="text-xs bg-green-500 text-white px-1 rounded">TF</span>' : '';
-            
-            aiInfoContainer.innerHTML = `
-                <div class="space-y-1">
-                    <div class="text-xs high-contrast-text opacity-75">
-                        <i class="fas fa-brain mr-1"></i>AI: ${Math.round(analysis.confidence * 100)}% ${methodBadge}
-                    </div>
-                    ${analysis.objects.length > 0 ? `
-                        <div class="text-xs high-contrast-text opacity-75">
-                            <i class="fas fa-eye mr-1"></i>${analysis.objects[0].label}
-                        </div>
-                    ` : ''}
-                    ${analysis.smartTags.length > 0 ? `
-                        <div class="flex flex-wrap gap-1 mt-2">
-                            ${analysis.smartTags.slice(0, 3).map(tag => `
-                                <span class="tag-item px-2 py-1 rounded text-xs">${tag}</span>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        function updateGalleryStats() {
-            const totalImages = currentImages.length;
-            const analyzedImages = aiAnalysisResults.size;
-            const allTags = new Set();
-            let totalScore = 0;
-
-            aiAnalysisResults.forEach(analysis => {
-                analysis.smartTags.forEach(tag => allTags.add(tag));
-                totalScore += analysis.confidence;
-            });
-
-            const avgScore = analyzedImages > 0 ? Math.round((totalScore / analyzedImages) * 100) : 0;
-
-            document.getElementById('total-images').textContent = totalImages;
-            document.getElementById('analyzed-images').textContent = analyzedImages;
-            document.getElementById('total-tags').textContent = allTags.size;
-            document.getElementById('avg-score').textContent = avgScore + '%';
-        }
-
-        function openImageModal(index) {
-            currentImageIndex = index;
-            const image = currentImages[index];
-            const analysis = aiAnalysisResults.get(image.id);
-
-            document.getElementById('modal-title').textContent = image.name;
-            document.getElementById('modal-image').src = image.url;
-
-            updateModalImageInfo(image);
-            updateModalAIAnalysis(analysis);
-            updateModalTags(analysis ? analysis.smartTags : []);
-            loadImageNotes(image.id);
-            loadCustomTags(image.id);
-
-            document.getElementById('image-detail-modal').classList.remove('hidden');
-            
-            // 如果还没有分析结果，立即开始分析
-            if (!analysis) {
-                analyzeCurrentImage();
-            }
-        }
-
-        function updateModalImageInfo(image) {
-            const container = document.getElementById('modal-image-info');
-            container.innerHTML = `
-                <div class="space-y-2">
-                    <div class="flex justify-between">
-                        <span class="high-contrast-text font-medium">文件名:</span>
-                        <span class="high-contrast-text">${image.name}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="high-contrast-text font-medium">来源:</span>
-                        <span class="high-contrast-text">${image.loadMethod}</span>
-                    </div>
-                    ${image.size ? `
-                        <div class="flex justify-between">
-                            <span class="high-contrast-text font-medium">大小:</span>
-                            <span class="high-contrast-text">${formatFileSize(image.size)}</span>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        function updateModalAIAnalysis(analysis) {
-            const container = document.getElementById('modal-ai-analysis');
-            
-            if (!analysis) {
-                container.innerHTML = `
-                    <div class="glass-effect rounded-lg p-4 text-center">
-                        <div class="loading-spinner mx-auto mb-4"></div>
-                        <p class="high-contrast-text">正在进行AI分析...</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const methodBadge = analysis.method === 'tensorflow' ? 
-                '<span class="bg-green-500 text-white px-2 py-1 rounded text-xs ml-2">TensorFlow.js</span>' : 
-                '<span class="bg-blue-500 text-white px-2 py-1 rounded text-xs ml-2">基础分析</span>';
-
-            container.innerHTML = `
-                <div class="space-y-4">
-                    <div class="ai-analysis-item">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="high-contrast-text font-semibold">整体置信度${methodBadge}</span>
-                            <span class="high-contrast-text font-bold">${Math.round(analysis.confidence * 100)}%</span>
-                        </div>
-                        <div class="confidence-bar">
-                            <div class="h-full bg-blue-500 rounded transition-all duration-500" 
-                                 style="width: ${analysis.confidence * 100}%"></div>
-                        </div>
-                    </div>
-                    
-                    ${analysis.objects.length > 0 ? `
-                        <div class="ai-analysis-item">
-                            <h4 class="high-contrast-text font-semibold mb-3">
-                                <i class="fas fa-eye mr-2"></i>检测到的物体
-                            </h4>
-                            <div class="space-y-2">
-                                ${analysis.objects.map(obj => `
-                                    <div class="flex items-center justify-between">
-                                        <span class="high-contrast-text">${obj.label}</span>
-                                        <div class="flex items-center space-x-2">
-                                            <span class="text-sm high-contrast-text opacity-75">${Math.round(obj.confidence * 100)}%</span>
-                                            ${obj.category === 'detection' ? '<span class="bg-green-500 text-white px-1 rounded text-xs">检测</span>' : ''}
-                                            ${obj.category === 'classification' ? '<span class="bg-blue-500 text-white px-1 rounded text-xs">分类</span>' : ''}
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    ${analysis.scenes.length > 0 ? `
-                        <div class="ai-analysis-item">
-                            <h4 class="high-contrast-text font-semibold mb-3">
-                                <i class="fas fa-landscape mr-2"></i>场景分析
-                            </h4>
-                            <div class="space-y-2">
-                                ${analysis.scenes.map(scene => `
-                                    <div class="flex items-center justify-between">
-                                        <span class="high-contrast-text">${scene.label}</span>
-                                        <span class="text-sm high-contrast-text opacity-75">${Math.round(scene.confidence * 100)}%</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    ${analysis.quality ? `
-                        <div class="ai-analysis-item">
-                            <h4 class="high-contrast-text font-semibold mb-3">
-                                <i class="fas fa-award mr-2"></i>图片质量
-                            </h4>
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between">
-                                    <span class="high-contrast-text">清晰度</span>
-                                    <span class="text-sm high-contrast-text opacity-75">${Math.round(analysis.quality.sharpness * 100)}%</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="high-contrast-text">噪点控制</span>
-                                    <span class="text-sm high-contrast-text opacity-75">${Math.round((1 - analysis.quality.noise) * 100)}%</span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="high-contrast-text">曝光</span>
-                                    <span class="text-sm high-contrast-text opacity-75">${Math.round(analysis.quality.exposure * 100)}%</span>
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        function updateModalTags(tags) {
-            const container = document.getElementById('modal-tags');
-            container.innerHTML = tags.map(tag => `
-                <span class="tag-item px-3 py-1 rounded-lg text-sm">${tag}</span>
-            `).join('');
-        }
-
-        // 备注功能
-        function loadImageNotes(imageId) {
-            const notes = imageNotes.get(imageId) || '';
-            document.getElementById('image-notes').value = notes;
-        }
-
-        function saveImageNotes() {
-            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
-                const imageId = currentImages[currentImageIndex].id;
-                const notes = document.getElementById('image-notes').value;
-                imageNotes.set(imageId, notes);
-                
-                // 保存到localStorage
-                const allNotes = {};
-                imageNotes.forEach((value, key) => {
-                    allNotes[key] = value;
-                });
-                localStorage.setItem('image_notes', JSON.stringify(allNotes));
-                
-                showTooltip('备注已保存');
-            }
-        }
-
-        function clearImageNotes() {
-            document.getElementById('image-notes').value = '';
-            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
-                const imageId = currentImages[currentImageIndex].id;
-                imageNotes.delete(imageId);
-                
-                // 更新localStorage
-                const allNotes = {};
-                imageNotes.forEach((value, key) => {
-                    allNotes[key] = value;
-                });
-                localStorage.setItem('image_notes', JSON.stringify(allNotes));
-                
-                showTooltip('备注已清除');
-            }
-        }
-
-        // 自定义标签功能
-        function loadCustomTags(imageId) {
-            const tags = customTags.get(imageId) || [];
-            updateCustomTagsDisplay(tags);
-        }
-
-        function addCustomTag() {
-            const input = document.getElementById('custom-tag-input');
-            const tag = input.value.trim();
-            
-            if (tag && currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
-                const imageId = currentImages[currentImageIndex].id;
-                const existingTags = customTags.get(imageId) || [];
-                
-                if (!existingTags.includes(tag)) {
-                    existingTags.push(tag);
-                    customTags.set(imageId, existingTags);
-                    updateCustomTagsDisplay(existingTags);
-                    saveCustomTags();
-                    input.value = '';
-                    showTooltip('标签已添加');
-                } else {
-                    showTooltip('标签已存在');
-                }
-            }
-        }
-
-        function removeCustomTag(tag) {
-            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
-                const imageId = currentImages[currentImageIndex].id;
-                const existingTags = customTags.get(imageId) || [];
-                const updatedTags = existingTags.filter(t => t !== tag);
-                
-                customTags.set(imageId, updatedTags);
-                updateCustomTagsDisplay(updatedTags);
-                saveCustomTags();
-                showTooltip('标签已删除');
-            }
-        }
-
-        function updateCustomTagsDisplay(tags) {
-            const container = document.getElementById('custom-tags-container');
-            container.innerHTML = tags.map(tag => `
-                <span class="tag-item removable px-3 py-1 rounded-lg text-sm">
-                    ${tag}
-                    <span class="remove-tag" onclick="removeCustomTag('${tag}')">
-                        <i class="fas fa-times"></i>
-                    </span>
-                </span>
-            `).join('');
-        }
-
-        function saveCustomTags() {
-            const allTags = {};
-            customTags.forEach((value, key) => {
-                allTags[key] = value;
-            });
-            localStorage.setItem('custom_tags', JSON.stringify(allTags));
-        }
-
-        function handleTagInputKeyPress(event) {
-            if (event.key === 'Enter') {
-                addCustomTag();
-            }
-        }
-
-        // 初始化时加载保存的数据
-        function loadSavedData() {
-            // 加载备注
-            const savedNotes = localStorage.getItem('image_notes');
-            if (savedNotes) {
-                const notesData = JSON.parse(savedNotes);
-                Object.entries(notesData).forEach(([key, value]) => {
-                    imageNotes.set(key, value);
-                });
-            }
-            
-            // 加载自定义标签
-            const savedTags = localStorage.getItem('custom_tags');
-            if (savedTags) {
-                const tagsData = JSON.parse(savedTags);
-                Object.entries(tagsData).forEach(([key, value]) => {
-                    customTags.set(key, value);
-                });
-            }
-        }
-
-        function navigateImage(direction) {
-            const newIndex = currentImageIndex + direction;
-            if (newIndex >= 0 && newIndex < currentImages.length) {
-                openImageModal(newIndex);
-            }
-        }
-
-        function closeImageModal() {
-            document.getElementById('image-detail-modal').classList.add('hidden');
-        }
-
-        async function analyzeCurrentImage() {
-            if (currentImageIndex < 0 || currentImageIndex >= currentImages.length) return;
-
-            const image = currentImages[currentImageIndex];
-            const modalImage = document.getElementById('modal-image');
-            
-            updateModalAIAnalysis(null); // 显示加载状态
-            
-            try {
-                const analysis = await imageLoader.aiEngine.analyzeImage(null, modalImage, 'high');
-                aiAnalysisResults.set(image.id, analysis);
-                updateModalAIAnalysis(analysis);
-                updateModalTags(analysis.smartTags);
+            // 自动刷新图库
+            if (newImages.length > 0 && document.getElementById('auto-refresh-after-upload').checked) {
+                currentImages = [...currentImages, ...newImages];
+                await renderImages(currentImages);
                 updateGalleryStats();
-                
-                // 更新对应的图片卡片
-                const imageCard = document.querySelector(`[data-cache-key="${image.id}"]`);
-                if (imageCard) {
-                    updateImageCardAnalysis(imageCard, analysis);
-                }
-            } catch (error) {
-                console.error('AI分析失败:', error);
-                updateModalAIAnalysis(imageLoader.aiEngine.getDefaultAnalysis());
             }
+
+            // 清空输入
+            input.value = '';
         }
 
-        function downloadImage(url, filename) {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function shareImage(imageId) {
-            const image = currentImages.find(img => img.id === imageId);
-            if (!image) return;
-
-            if (navigator.share) {
-                navigator.share({
-                    title: image.name,
-                    url: image.url
-                });
-            } else {
-                navigator.clipboard.writeText(image.url).then(() => {
-                    showTooltip('图片链接已复制到剪贴板');
-                });
-            }
-        }
-
-        function downloadCurrentImage() {
-            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
-                const image = currentImages[currentImageIndex];
-                downloadImage(image.url, image.name);
-            }
-        }
-
-        function shareCurrentImage() {
-            if (currentImageIndex >= 0 && currentImageIndex < currentImages.length) {
-                const image = currentImages[currentImageIndex];
-                shareImage(image.id);
-            }
-        }
-
-        async function refreshGallery() {
-            await loadImages();
-        }
-
-        function showTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.add('hidden');
-            });
-
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('admin-btn');
-                btn.classList.add('theme-btn');
-            });
-
-            const targetTab = document.getElementById(tabName + '-tab');
-            if (targetTab) {
-                targetTab.classList.remove('hidden');
-            }
-
-            const activeBtn = document.querySelector(`.tab-btn[onclick="showTab('${tabName}')"]`);
-            if (activeBtn) {
-                activeBtn.classList.remove('theme-btn');
-                activeBtn.classList.add('admin-btn');
-            }
-
-            // 特殊处理AI分析标签页
-            if (tabName === 'ai-analysis') {
-                updateAIAnalysisTab();
-            }
-        }
-
-        function updateAIAnalysisTab() {
-            const container = document.getElementById('ai-analysis-details');
-            
-            if (aiAnalysisResults.size === 0) {
-                container.innerHTML = `
-                    <div class="glass-effect rounded-xl p-12 text-center">
-                        <i class="fas fa-brain text-6xl text-gray-400 mb-4"></i>
-                        <h3 class="high-contrast-text text-xl font-semibold mb-2">暂无AI分析数据</h3>
-                        <p class="high-contrast-text opacity-75">请先浏览图片以开始AI分析</p>
-                    </div>
-                `;
-                return;
-            }
-
-            // 统计分析结果
-            const stats = {
-                objects: {},
-                scenes: {},
-                emotions: {},
-                colors: {},
-                methods: { tensorflow: 0, basic: 0 }
-            };
-
-            aiAnalysisResults.forEach(analysis => {
-                // 统计分析方法
-                if (analysis.method === 'tensorflow') {
-                    stats.methods.tensorflow++;
-                } else {
-                    stats.methods.basic++;
-                }
-                
-                analysis.objects.forEach(obj => {
-                    stats.objects[obj.label] = (stats.objects[obj.label] || 0) + 1;
-                });
-                analysis.scenes.forEach(scene => {
-                    stats.scenes[scene.label] = (stats.scenes[scene.label] || 0) + 1;
-                });
-                analysis.emotions.forEach(emotion => {
-                    stats.emotions[emotion.label] = (stats.emotions[emotion.label] || 0) + 1;
-                });
-                analysis.colors.forEach(color => {
-                    stats.colors[color.name] = (stats.colors[color.name] || 0) + 1;
-                });
-            });
-
-            container.innerHTML = `
-                <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                    <div class="glass-effect rounded-xl p-6">
-                        <h3 class="high-contrast-text text-lg font-semibold mb-4">
-                            <i class="fas fa-cogs mr-2"></i>分析方法
-                        </h3>
-                        <div class="space-y-2">
-                            <div class="flex justify-between items-center">
-                                <span class="high-contrast-text">TensorFlow.js</span>
-                                <span class="bg-green-500 text-white px-2 py-1 rounded text-sm">${stats.methods.tensorflow}</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="high-contrast-text">基础分析</span>
-                                <span class="bg-blue-500 text-white px-2 py-1 rounded text-sm">${stats.methods.basic}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="glass-effect rounded-xl p-6">
-                        <h3 class="high-contrast-text text-lg font-semibold mb-4">
-                            <i class="fas fa-fire mr-2"></i>热门物体
-                        </h3>
-                        <div class="space-y-2">
-                            ${Object.entries(stats.objects)
-                                .sort(([,a], [,b]) => b - a)
-                                .slice(0, 5)
-                                .map(([object, count]) => `
-                                    <div class="flex justify-between items-center">
-                                        <span class="high-contrast-text">${object}</span>
-                                        <span class="ai-badge px-2 py-1 rounded text-sm">${count}</span>
-                                    </div>
-                                `).join('')}
-                        </div>
-                    </div>
-                    
-                    <div class="glass-effect rounded-xl p-6">
-                        <h3 class="high-contrast-text text-lg font-semibold mb-4">
-                            <i class="fas fa-mountain mr-2"></i>热门场景
-                        </h3>
-                        <div class="space-y-2">
-                            ${Object.entries(stats.scenes)
-                                .sort(([,a], [,b]) => b - a)
-                                .slice(0, 5)
-                                .map(([scene, count]) => `
-                                    <div class="flex justify-between items-center">
-                                        <span class="high-contrast-text">${scene}</span>
-                                        <span class="ai-badge px-2 py-1 rounded text-sm">${count}</span>
-                                    </div>
-                                `).join('')}
-                        </div>
-                    </div>
-                    
-                    <div class="glass-effect rounded-xl p-6">
-                        <h3 class="high-contrast-text text-lg font-semibold mb-4">
-                            <i class="fas fa-palette mr-2"></i>主要颜色
-                        </h3>
-                        <div class="space-y-2">
-                            ${Object.entries(stats.colors)
-                                .sort(([,a], [,b]) => b - a)
-                                .slice(0, 5)
-                                .map(([color, count]) => `
-                                    <div class="flex justify-between items-center">
-                                        <span class="high-contrast-text">${color}</span>
-                                        <span class="ai-badge px-2 py-1 rounded text-sm">${count}</span>
-                                    </div>
-                                `).join('')}
-                        </div>
-                    </div>
-                </div>
+        function updateUploadProgress(current, total) {
+            const uploadStatus = document.getElementById('upload-status');
+            uploadStatus.innerHTML = `
+                <div class="loading-spinner inline-block mr-2"></div>
+                正在上传 ${current}/${total}...
             `;
+        }
+
+        async function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // UI交互功能
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.add('hidden'));
+            document.getElementById(`${tabId}-tab`).classList.remove('hidden');
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`button[onclick="showTab('${tabId}')"]`).classList.add('active');
+
+            if (tabId === 'ai-analysis') {
+                renderAIAnalysisDetails();
+            }
         }
 
         function initializeThemes() {
-            const themeOptions = document.getElementById('theme-options');
             const themes = [
-                { name: '默认主题', bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-                { name: '海洋主题', bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-                { name: '森林主题', bg: 'linear-gradient(135deg, #134e5e 0%, #71b280 100%)' },
-                { name: '日落主题', bg: 'linear-gradient(135deg, #ff6b6b 0%, #feca57 50%, #ff9ff3 100%)' }
+                { name: '默认', colors: { primary: '#3B82F6', secondary: '#10B981', accent: '#F59E0B' } },
+                { name: '夜间', colors: { primary: '#1E40AF', secondary: '#065F46', accent: '#B45309' } },
+                { name: '自然', colors: { primary: '#059669', secondary: '#3B82F6', accent: '#D97706' } },
+                { name: '经典', colors: { primary: '#7C3AED', secondary: '#DB2777', accent: '#EA580C' } }
             ];
 
-            themeOptions.innerHTML = themes.map((theme, index) => `
-                <div class="theme-option cursor-pointer" onclick="applyTheme(${index})">
-                    <div class="w-full h-16 rounded-lg mb-2 transition-transform hover:scale-105" 
-                         style="background: ${theme.bg}"></div>
-                    <p class="high-contrast-text text-sm text-center">${theme.name}</p>
-                </div>
-            `).join('');
-
-            const savedTheme = localStorage.getItem('selected_theme');
-            if (savedTheme) {
-                applyTheme(parseInt(savedTheme));
-            }
+            const themeOptions = document.getElementById('theme-options');
+            themes.forEach(theme => {
+                const button = document.createElement('button');
+                button.className = 'theme-btn px-4 py-2 rounded-lg text-center';
+                button.innerHTML = `
+                    <div class="flex items-center justify-center space-x-2">
+                        <div class="w-4 h-4 rounded-full" style="background: ${theme.colors.primary}"></div>
+                        <span>${theme.name}</span>
+                    </div>
+                `;
+                button.onclick = () => applyTheme(theme.colors);
+                themeOptions.appendChild(button);
+            });
         }
 
-        function applyTheme(themeIndex) {
-            const themes = [
-                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                'linear-gradient(135deg, #134e5e 0%, #71b280 100%)',
-                'linear-gradient(135deg, #ff6b6b 0%, #feca57 50%, #ff9ff3 100%)'
-            ];
-
-            document.body.style.background = themes[themeIndex];
-            localStorage.setItem('selected_theme', themeIndex);
-            showTooltip('主题已更新');
+        function applyTheme(colors) {
+            document.documentElement.style.setProperty('--primary-color', colors.primary);
+            document.documentElement.style.setProperty('--secondary-color', colors.secondary);
+            document.documentElement.style.setProperty('--accent-color', colors.accent);
+            localStorage.setItem('theme', JSON.stringify(colors));
         }
 
         function initializeSettings() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                applyTheme(JSON.parse(savedTheme));
+            }
+
             const settings = getSettings();
-            
             document.getElementById('auto-analyze').checked = settings.autoAnalyze;
             document.getElementById('smart-preload').checked = settings.smartPreload;
             document.getElementById('quality-analysis').checked = settings.qualityAnalysis;
@@ -2608,27 +2093,19 @@
             document.getElementById('lazy-loading').checked = settings.lazyLoading;
             document.getElementById('preload-count').value = settings.preloadCount;
             document.getElementById('preload-count-value').textContent = settings.preloadCount;
+
+            document.getElementById('preload-count').addEventListener('input', (e) => {
+                document.getElementById('preload-count-value').textContent = e.target.value;
+                saveSettings();
+            });
+
+            document.querySelectorAll('#settings-tab input[type="checkbox"]').forEach(input => {
+                input.addEventListener('change', saveSettings);
+            });
         }
 
         function getSettings() {
-            const defaultSettings = {
-                autoAnalyze: false,
-                smartPreload: true,
-                qualityAnalysis: true,
-                tensorflowAnalysis: true,
-                imageCompression: true,
-                lazyLoading: true,
-                preloadCount: 3
-            };
-            
             return {
-                ...defaultSettings,
-                ...JSON.parse(localStorage.getItem('gallery_settings') || '{}')
-            };
-        }
-
-        function saveSettings() {
-            const settings = {
                 autoAnalyze: document.getElementById('auto-analyze').checked,
                 smartPreload: document.getElementById('smart-preload').checked,
                 qualityAnalysis: document.getElementById('quality-analysis').checked,
@@ -2637,244 +2114,592 @@
                 lazyLoading: document.getElementById('lazy-loading').checked,
                 preloadCount: parseInt(document.getElementById('preload-count').value)
             };
-            
-            localStorage.setItem('gallery_settings', JSON.stringify(settings));
         }
 
-        function initializeTagFilter() {
+        function saveSettings() {
+            const settings = getSettings();
+            localStorage.setItem('settings', JSON.stringify(settings));
+            if (!settings.tensorflowAnalysis && isModelLoaded) {
+                imageLoader.aiEngine.tensorflowManager.models = {};
+                isModelLoaded = false;
+            }
+        }
+
+        async function loadImages() {
+            document.getElementById('loading-indicator').style.display = 'block';
+            currentImages = await imageLoader.loadAllImages();
+            
+            if (currentImages.length === 0) {
+                document.getElementById('no-images').style.display = 'block';
+                document.getElementById('images-grid').style.display = 'none';
+                document.getElementById('gallery-stats').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('no-images').style.display = 'none';
+            document.getElementById('images-grid').style.display = 'grid';
+            document.getElementById('gallery-stats').style.display = 'grid';
+            
+            await renderImages(currentImages);
+            updateGalleryStats();
+            preloadImages();
+        }
+
+        async function renderImages(images) {
+            const grid = document.getElementById('images-grid');
+            grid.innerHTML = '';
+            
+            const settings = getSettings();
+            const fragment = document.createDocumentFragment();
+            
+            for (const image of images) {
+                const card = document.createElement('div');
+                card.className = 'image-card rounded-xl p-4 glass-effect';
+                card.dataset.cacheKey = image.url;
+                card.dataset.imageId = image.id;
+                
+                const img = new Image();
+                img.src = image.url;
+                img.alt = image.name;
+                img.className = 'smart-crop lazy-image';
+                
+                if (settings.lazyLoading) {
+                    img.dataset.src = image.url;
+                    img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+                }
+
+                const container = document.createElement('div');
+                container.className = 'image-container';
+                container.innerHTML = '<div class="image-loading pulse-animation"><i class="fas fa-spinner fa-spin text-2xl"></i></div>';
+                container.appendChild(img);
+
+                const qualityBadge = document.createElement('div');
+                qualityBadge.className = 'quality-badge hidden';
+
+                const preloadIndicator = document.createElement('div');
+                preloadIndicator.className = 'preload-indicator hidden';
+                preloadIndicator.textContent = '预加载';
+
+                container.appendChild(qualityBadge);
+                container.appendChild(preloadIndicator);
+
+                const overlay = document.createElement('div');
+                overlay.className = 'ai-analysis-overlay';
+                overlay.innerHTML = `
+                    <svg class="ai-progress-ring">
+                        <circle cx="30" cy="30" r="25" />
+                        <circle class="progress" cx="30" cy="30" r="25" />
+                    </svg>
+                    <p class="high-contrast-text font-semibold mt-2">AI分析中...</p>
+                `;
+
+                container.appendChild(overlay);
+                card.appendChild(container);
+
+                const details = document.createElement('div');
+                details.className = 'mt-4';
+                details.innerHTML = `
+                    <h3 class="high-contrast-text font-semibold truncate">${image.name}</h3>
+                    <div class="tags flex flex-wrap gap-2 mt-2"></div>
+                    <div class="confidence-bar mt-2"></div>
+                `;
+
+                card.appendChild(details);
+                fragment.appendChild(card);
+
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    container.querySelector('.image-loading').remove();
+                    if (settings.autoAnalyze) {
+                        analyzeImage(image, img, card);
+                    }
+                };
+
+                card.addEventListener('click', () => openImageModal(image, images.indexOf(image)));
+            }
+
+            grid.appendChild(fragment);
+            
+            if (settings.lazyLoading) {
+                setupLazyLoading();
+            }
+        }
+
+        async function analyzeImage(image, imgElement, card) {
+            const settings = getSettings();
+            if (!settings.autoAnalyze && !card.dataset.analyzed) return;
+
+            card.querySelector('.ai-analysis-overlay').style.opacity = '1';
+            const result = await imageLoader.aiEngine.analyzeImage(image, imgElement);
+            card.dataset.analyzed = 'true';
+            
+            updateImageCardAnalysis(card, result);
+            aiAnalysisResults.set(image.url, result);
+            
+            updateTagFilter();
+            updateGalleryStats();
+        }
+
+        function updateImageCardAnalysis(card, analysis) {
+            const tagsContainer = card.querySelector('.tags');
+            tagsContainer.innerHTML = '';
+
+            analysis.smartTags.forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag-item px-2 py-1 rounded-full text-sm';
+                tagElement.textContent = tag;
+                tagsContainer.appendChild(tagElement);
+            });
+
+            const confidenceBar = card.querySelector('.confidence-bar');
+            confidenceBar.style.width = `${analysis.confidence * 100}%`;
+
+            const qualityBadge = card.querySelector('.quality-badge');
+            if (analysis.quality) {
+                qualityBadge.classList.remove('hidden');
+                qualityBadge.textContent = analysis.quality.overall > 0.8 ? '高质量' :
+                                        analysis.quality.overall > 0.5 ? '中等' : '低质量';
+                qualityBadge.className = `quality-badge ${analysis.quality.overall > 0.8 ? 'quality-high' : 
+                                       analysis.quality.overall > 0.5 ? 'quality-medium' : 'quality-low'}`;
+            }
+
+            card.querySelector('.ai-analysis-overlay').style.opacity = '0';
+            const progressCircle = card.querySelector('.ai-progress-ring .progress');
+            progressCircle.style.strokeDashoffset = 157 - (157 * analysis.confidence);
+        }
+
+        function updateTagFilter() {
             const tagFilter = document.getElementById('tag-filter');
             const tags = new Set();
-            
-            aiAnalysisResults.forEach(analysis => {
-                analysis.smartTags.forEach(tag => tags.add(tag));
+
+            aiAnalysisResults.forEach(result => {
+                result.smartTags.forEach(tag => tags.add(tag));
             });
 
-            // 添加自定义标签
-            customTags.forEach(tagList => {
-                tagList.forEach(tag => tags.add(tag));
+            tagFilter.innerHTML = '<option value="">所有标签</option>';
+            tags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                tagFilter.appendChild(option);
             });
-
-            tagFilter.innerHTML = '<option value="">所有标签</option>' + 
-                Array.from(tags).sort().map(tag => `<option value="${tag}">${tag}</option>`).join('');
         }
 
-        function bindEvents() {
-            const searchInput = document.getElementById('search-input');
-            const tagFilter = document.getElementById('tag-filter');
-            const sortOption = document.getElementById('sort-option');
-            const searchSuggestions = document.getElementById('search-suggestions');
-            const preloadCountSlider = document.getElementById('preload-count');
-            const preloadCountValue = document.getElementById('preload-count-value');
+        function updateGalleryStats() {
+            const totalImages = currentImages.length;
+            const analyzedImages = Array.from(aiAnalysisResults.values()).length;
+            const totalTags = Array.from(aiAnalysisResults.values()).reduce((sum, result) => sum + result.smartTags.length, 0);
+            const avgScore = analyzedImages > 0 
+                ? (Array.from(aiAnalysisResults.values()).reduce((sum, result) => sum + result.confidence, 0) / analyzedImages).toFixed(2)
+                : 0;
 
-            // 搜索功能
-            searchInput.addEventListener('input', debounce((e) => {
-                const query = e.target.value.toLowerCase();
-                
-                if (query.length > 0) {
-                    showSearchSuggestions(query);
-                    filterImages(query);
-                } else {
-                    hideSearchSuggestions();
-                    renderImages(currentImages);
-                }
-            }, 300));
-
-            searchInput.addEventListener('focus', () => {
-                if (searchInput.value.length > 0) {
-                    showSearchSuggestions(searchInput.value.toLowerCase());
-                }
-            });
-
-            searchInput.addEventListener('blur', () => {
-                setTimeout(() => hideSearchSuggestions(), 200);
-            });
-
-            // 标签过滤
-            tagFilter.addEventListener('change', () => {
-                const selectedTag = tagFilter.value;
-                const filteredImages = selectedTag ? 
-                    currentImages.filter(image => {
-                        const analysis = aiAnalysisResults.get(image.id);
-                        const customImageTags = customTags.get(image.id) || [];
-                        return (analysis && analysis.smartTags.includes(selectedTag)) || 
-                               customImageTags.includes(selectedTag);
-                    }) : 
-                    currentImages;
-                renderImages(filteredImages);
-            });
-
-            // 排序
-            sortOption.addEventListener('change', () => {
-                const sortValue = sortOption.value;
-                let sortedImages = [...currentImages];
-
-                switch (sortValue) {
-                    case 'newest':
-                        sortedImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                        break;
-                    case 'oldest':
-                        sortedImages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-                        break;
-                    case 'name':
-                        sortedImages.sort((a, b) => a.name.localeCompare(b.name));
-                        break;
-                    case 'ai-score':
-                        sortedImages.sort((a, b) => {
-                            const scoreA = aiAnalysisResults.get(a.id)?.confidence || 0;
-                            const scoreB = aiAnalysisResults.get(b.id)?.confidence || 0;
-                            return scoreB - scoreA;
-                        });
-                        break;
-                }
-
-                renderImages(sortedImages);
-            });
-
-            // 预加载数量滑块
-            preloadCountSlider.addEventListener('input', (e) => {
-                preloadCountValue.textContent = e.target.value;
-            });
-
-            // 键盘导航
-            document.addEventListener('keydown', (event) => {
-                if (!document.getElementById('image-detail-modal').classList.contains('hidden')) {
-                    if (event.key === 'ArrowLeft') navigateImage(-1);
-                    if (event.key === 'ArrowRight') navigateImage(1);
-                    if (event.key === 'Escape') closeImageModal();
-                }
-            });
-
-            // 设置变更监听
-            document.querySelectorAll('#settings-tab input[type="checkbox"], #settings-tab input[type="range"]').forEach(input => {
-                input.addEventListener('change', saveSettings);
-            });
-
-            // 窗口大小变更时重新调整
-            window.addEventListener('resize', debounce(() => {
-                adjustImageSize();
-            }, 150));
-
-            // 加载保存的数据
-            loadSavedData();
+            document.getElementById('total-images').textContent = totalImages;
+            document.getElementById('analyzed-images').textContent = analyzedImages;
+            document.getElementById('total-tags').textContent = totalTags;
+            document.getElementById('avg-score').textContent = avgScore;
         }
 
-        function showSearchSuggestions(query) {
-            const suggestions = generateSearchSuggestions(query);
-            const container = document.getElementById('search-suggestions');
-            
-            if (suggestions.length > 0) {
-                container.innerHTML = suggestions.map(suggestion => `
-                    <div class="search-suggestion-item" onclick="selectSearchSuggestion('${suggestion}')">
-                        <i class="fas fa-search mr-2"></i>${suggestion}
-                    </div>
-                `).join('');
-                container.classList.remove('hidden');
-            } else {
-                hideSearchSuggestions();
-            }
-        }
+        function preloadImages() {
+            const settings = getSettings();
+            const preloadCount = settings.preloadCount;
+            const visibleImages = document.querySelectorAll('.image-card:not(.preloaded)');
 
-        function hideSearchSuggestions() {
-            document.getElementById('search-suggestions').classList.add('hidden');
-        }
-
-        function generateSearchSuggestions(query) {
-            const suggestions = new Set();
-            
-            // 从图片名称中提取建议
-            currentImages.forEach(image => {
-                if (image.name.toLowerCase().includes(query)) {
-                    suggestions.add(image.name);
+            visibleImages.forEach((card, index) => {
+                if (index < preloadCount) {
+                    const img = card.querySelector('img');
+                    imageLoader.preloadImage(img.dataset.src || img.src, 'high').then(() => {
+                        card.classList.add('preloaded');
+                        card.querySelector('.preload-indicator').classList.remove('hidden');
+                        setTimeout(() => card.querySelector('.preload-indicator').classList.add('hidden'), 2000);
+                    });
                 }
             });
+        }
 
-            // 从AI标签中提取建议
-            aiAnalysisResults.forEach(analysis => {
-                analysis.smartTags.forEach(tag => {
-                    if (tag.toLowerCase().includes(query)) {
-                        suggestions.add(tag);
+        function setupLazyLoading() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        if (img.dataset.src) {
+                            img.src = img.dataset.src;
+                            img.classList.add('loaded');
+                            observer.unobserve(img);
+                        }
                     }
                 });
-            });
+            }, { rootMargin: '200px' });
 
-            // 从自定义标签中提取建议
-            customTags.forEach(tagList => {
-                tagList.forEach(tag => {
-                    if (tag.toLowerCase().includes(query)) {
-                        suggestions.add(tag);
-                    }
-                });
-            });
-
-            return Array.from(suggestions).slice(0, 5);
+            document.querySelectorAll('.lazy-image').forEach(img => observer.observe(img));
         }
 
-        function selectSearchSuggestion(suggestion) {
-            document.getElementById('search-input').value = suggestion;
-            hideSearchSuggestions();
-            filterImages(suggestion.toLowerCase());
+        function openImageModal(image, index) {
+            currentImageIndex = index;
+            const modal = document.getElementById('image-detail-modal');
+            modal.classList.remove('hidden');
+
+            updateModalContent(image);
         }
 
-        function filterImages(query) {
-            const filteredImages = currentImages.filter(image => {
-                const analysis = aiAnalysisResults.get(image.id);
-                const customImageTags = customTags.get(image.id) || [];
-                const notes = imageNotes.get(image.id) || '';
-                
-                return image.name.toLowerCase().includes(query) ||
-                       (analysis && analysis.smartTags.some(tag => tag.toLowerCase().includes(query))) ||
-                       customImageTags.some(tag => tag.toLowerCase().includes(query)) ||
-                       notes.toLowerCase().includes(query);
-            });
-            renderImages(filteredImages);
+        function closeImageModal() {
+            document.getElementById('image-detail-modal').classList.add('hidden');
         }
 
-        function adjustImageSize() {
+        function updateModalContent(image) {
             const modalImage = document.getElementById('modal-image');
-            const container = document.querySelector('.modal-image-container');
-            if (modalImage && container) {
-                const maxHeight = window.innerHeight * 0.7;
-                container.style.maxHeight = `${maxHeight}px`;
-                modalImage.style.maxHeight = `${maxHeight}px`;
+            modalImage.src = image.url;
+            modalImage.alt = image.name;
+
+            document.getElementById('modal-title').textContent = image.name;
+
+            const infoContainer = document.getElementById('modal-image-info');
+            infoContainer.innerHTML = `
+                <p><strong>文件名:</strong> ${image.name}</p>
+                <p><strong>加载方式:</strong> ${image.loadMethod || '未知'}</p>
+                <p><strong>大小:</strong> ${image.size ? (image.size / 1024).toFixed(2) + ' KB' : '未知'}</p>
+                <p><strong>上传时间:</strong> ${new Date().toLocaleString()}</p>
+            `;
+
+            const analysis = aiAnalysisResults.get(image.url) || imageLoader.aiEngine.getDefaultAnalysis();
+            const aiAnalysisContainer = document.getElementById('modal-ai-analysis');
+            aiAnalysisContainer.innerHTML = `
+                <div class="ai-analysis-item">
+                    <h4 class="font-semibold">物体检测</h4>
+                    ${analysis.objects.map(obj => `
+                        <p>${obj.label}: ${(obj.confidence * 100).toFixed(1)}% 
+                        ${obj.bbox ? `(位置: ${obj.bbox.map(n => n.toFixed(0)).join(', ')})` : ''}</p>
+                    `).join('')}
+                </div>
+                <div class="ai-analysis-item">
+                    <h4 class="font-semibold">场景分类</h4>
+                    ${analysis.scenes.map(scene => `
+                        <p>${scene.label}: ${(scene.confidence * 100).toFixed(1)}%</p>
+                    `).join('')}
+                </div>
+                <div class="ai-analysis-item">
+                    <h4 class="font-semibold">情感分析</h4>
+                    ${analysis.emotions.map(emotion => `
+                        <p>${emotion.label}: ${(emotion.confidence * 100).toFixed(1)}%</p>
+                    `).join('')}
+                </div>
+                <div class="ai-analysis-item">
+                    <h4 class="font-semibold">颜色分析</h4>
+                    ${analysis.colors.map(color => `
+                        <p>
+                            <span class="inline-block w-4 h-4 mr-2 rounded" style="background: ${color.hex}"></span>
+                            ${color.name} (${color.percentage}%)
+                        </p>
+                    `).join('')}
+                </div>
+                ${analysis.quality ? `
+                    <div class="ai-analysis-item">
+                        <h4 class="font-semibold">质量分析</h4>
+                        <p>总体质量: ${(analysis.quality.overall * 100).toFixed(1)}%</p>
+                        <p>锐度: ${(analysis.quality.sharpness * 100).toFixed(1)}%</p>
+                        <p>噪声: ${(analysis.quality.noise * 100).toFixed(1)}%</p>
+                        <p>曝光: ${(analysis.quality.exposure * 100).toFixed(1)}%</p>
+                    </div>
+                ` : ''}
+                ${analysis.composition ? `
+                    <div class="ai-analysis-item">
+                        <h4 class="font-semibold">构图分析</h4>
+                        <p>对称性: ${(analysis.composition.symmetry * 100).toFixed(1)}%</p>
+                        <p>三分法则: ${(analysis.composition.ruleOfThirds * 100).toFixed(1)}%</p>
+                        <p>平衡性: ${(analysis.composition.balance * 100).toFixed(1)}%</p>
+                    </div>
+                ` : ''}
+            `;
+
+            const tagsContainer = document.getElementById('modal-tags');
+            tagsContainer.innerHTML = '';
+            analysis.smartTags.forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag-item px-2 py-1 rounded-full text-sm removable';
+                tagElement.innerHTML = `${tag} <i class="fas fa-times remove-tag"></i>`;
+                tagElement.querySelector('.remove-tag').addEventListener('click', () => removeTag(image.url, tag));
+                tagsContainer.appendChild(tagElement);
+            });
+
+            const notesTextarea = document.getElementById('image-notes');
+            notesTextarea.value = imageNotes.get(image.url) || '';
+
+            const customTagsContainer = document.getElementById('custom-tags-container');
+            customTagsContainer.innerHTML = '';
+            const customImageTags = customTags.get(image.url) || [];
+            customImageTags.forEach(tag => {
+                const tagElement = document.createElement('span');
+                tagElement.className = 'tag-item px-2 py-1 rounded-full text-sm removable';
+                tagElement.innerHTML = `${tag} <i class="fas fa-times remove-tag"></i>`;
+                tagElement.querySelector('.remove-tag').addEventListener('click', () => removeCustomTag(image.url, tag));
+                customTagsContainer.appendChild(tagElement);
+            });
+        }
+
+        function navigateImage(direction) {
+            currentImageIndex = (currentImageIndex + direction + currentImages.length) % currentImages.length;
+            updateModalContent(currentImages[currentImageIndex]);
+        }
+
+        function saveImageNotes() {
+            const image = currentImages[currentImageIndex];
+            const notes = document.getElementById('image-notes').value;
+            imageNotes.set(image.url, notes);
+            showTooltip('✅ 备注已保存');
+        }
+
+        function clearImageNotes() {
+            const image = currentImages[currentImageIndex];
+            document.getElementById('image-notes').value = '';
+            imageNotes.delete(image.url);
+            showTooltip('✅ 备注已清除');
+        }
+
+        function addCustomTag() {
+            const image = currentImages[currentImageIndex];
+            const tagInput = document.getElementById('custom-tag-input');
+            const tag = tagInput.value.trim();
+            if (tag) {
+                const imageTags = customTags.get(image.url) || [];
+                if (!imageTags.includes(tag)) {
+                    imageTags.push(tag);
+                    customTags.set(image.url, imageTags);
+                    updateModalContent(image);
+                    tagInput.value = '';
+                    showTooltip('✅ 标签已添加');
+                } else {
+                    showTooltip('⚠️ 标签已存在');
+                }
             }
         }
 
-        function showTooltip(message) {
+        function handleTagInputKeyPress(event) {
+            if (event.key === 'Enter') {
+                addCustomTag();
+            }
+        }
+
+        function removeTag(imageUrl, tag) {
+            const analysis = aiAnalysisResults.get(imageUrl);
+            if (analysis) {
+                analysis.smartTags = analysis.smartTags.filter(t => t !== tag);
+                aiAnalysisResults.set(imageUrl, analysis);
+                updateModalContent(currentImages[currentImageIndex]);
+                updateTagFilter();
+            }
+        }
+
+        function removeCustomTag(imageUrl, tag) {
+            const imageTags = customTags.get(imageUrl) || [];
+            customTags.set(imageUrl, imageTags.filter(t => t !== tag));
+            updateModalContent(currentImages[currentImageIndex]);
+        }
+
+        async function downloadCurrentImage() {
+            const image = currentImages[currentImageIndex];
+            try {
+                const response = await fetch(image.url);
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = image.name;
+                a.click();
+                URL.revokeObjectURL(url);
+                showTooltip('✅ 下载已开始');
+            } catch (error) {
+                showTooltip('❌ 下载失败');
+            }
+        }
+
+        async function shareCurrentImage() {
+            const image = currentImages[currentImageIndex];
+            try {
+                if (navigator.share) {
+                    await navigator.share({
+                        title: image.name,
+                        url: image.url
+                    });
+                    showTooltip('✅ 分享成功');
+                } else {
+                    navigator.clipboard.writeText(image.url);
+                    showTooltip('✅ 链接已复制到剪贴板');
+                }
+            } catch (error) {
+                showTooltip('❌ 分享失败');
+            }
+        }
+
+        async function analyzeCurrentImage() {
+            const image = currentImages[currentImageIndex];
+            const card = document.querySelector(`[data-cache-key="${image.url}"]`);
+            const imgElement = card.querySelector('img');
+            await analyzeImage(image, imgElement, card);
+            updateModalContent(image);
+            showTooltip('✅ 重新分析完成');
+        }
+
+        function renderAIAnalysisDetails() {
+            const detailsContainer = document.getElementById('ai-analysis-details');
+            detailsContainer.innerHTML = '';
+
+            aiAnalysisResults.forEach((analysis, url) => {
+                const image = currentImages.find(img => img.url === url);
+                if (!image) return;
+
+                const div = document.createElement('div');
+                div.className = 'ai-analysis-item';
+                div.innerHTML = `
+                    <div class="flex items-center space-x-4">
+                        <img src="${image.url}" alt="${image.name}" class="w-24 h-24 object-cover rounded-lg">
+                        <div>
+                            <h3 class="high-contrast-text font-semibold">${image.name}</h3>
+                            <p class="text-sm text-gray-500">置信度: ${(analysis.confidence * 100).toFixed(1)}%</p>
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                ${analysis.smartTags.map(tag => `
+                                    <span class="tag-item px-2 py-1 rounded-full text-sm">${tag}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                detailsContainer.appendChild(div);
+            });
+        }
+
+        async function refreshGallery() {
+            document.getElementById('loading-indicator').style.display = 'block';
+            aiAnalysisResults.clear();
+            await loadImages();
+            showTooltip('✅ 图库已刷新');
+        }
+
+        function showTooltip(message, duration = 3000) {
             const tooltip = document.getElementById('tooltip');
             tooltip.textContent = message;
             tooltip.classList.add('show');
             tooltip.style.left = '50%';
             tooltip.style.top = '20px';
             tooltip.style.transform = 'translateX(-50%)';
-            
+
             setTimeout(() => {
                 tooltip.classList.remove('show');
-            }, 3000);
+            }, duration);
         }
 
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        function bindEvents() {
+            document.getElementById('search-input').addEventListener('input', handleSearch);
+            document.getElementById('tag-filter').addEventListener('change', filterImages);
+            document.getElementById('sort-option').addEventListener('change', sortImages);
+            document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
         }
 
-        function debounce(func, wait) {
-            let timeout;
-            return function executedFunction(...args) {
-                const later = () => {
-                    clearTimeout(timeout);
-                    func(...args);
-                };
-                clearTimeout(timeout);
-                timeout = setTimeout(later, wait);
-            };
+        function handleSearch(event) {
+            const query = event.target.value.toLowerCase();
+            const suggestionsContainer = document.getElementById('search-suggestions');
+            suggestionsContainer.innerHTML = '';
+
+            if (query.length < 2) {
+                suggestionsContainer.classList.add('hidden');
+                filterImages();
+                return;
+            }
+
+            const suggestions = [];
+            currentImages.forEach(image => {
+                const analysis = aiAnalysisResults.get(image.url) || { smartTags: [] };
+                if (image.name.toLowerCase().includes(query) ||
+                    analysis.smartTags.some(tag => tag.toLowerCase().includes(query))) {
+                    suggestions.push({ image, score: calculateSearchScore(image, query) });
+                }
+            });
+
+            suggestions.sort((a, b) => b.score - a.score);
+            suggestions.slice(0, 5).forEach(suggestion => {
+                const div = document.createElement('div');
+                div.className = 'search-suggestion-item';
+                div.textContent = suggestion.image.name;
+                div.addEventListener('click', () => {
+                    document.getElementById('search-input').value = suggestion.image.name;
+                    filterImages();
+                    suggestionsContainer.classList.add('hidden');
+                });
+                suggestionsContainer.appendChild(div);
+            });
+
+            suggestionsContainer.classList.toggle('hidden', suggestions.length === 0);
+            filterImages();
         }
 
-        // 初始化默认标签页
-        showTab('gallery');
+        function calculateSearchScore(image, query) {
+            let score = 0;
+            if (image.name.toLowerCase().includes(query)) {
+                score += 0.6;
+            }
+            const analysis = aiAnalysisResults.get(image.url);
+            if (analysis && analysis.smartTags.some(tag => tag.toLowerCase().includes(query))) {
+                score += 0.4;
+            }
+            return score;
+        }
+
+        function filterImages() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const selectedTag = document.getElementById('tag-filter').value;
+            
+            const filteredImages = currentImages.filter(image => {
+                const analysis = aiAnalysisResults.get(image.url) || { smartTags: [] };
+                const matchesQuery = !query || 
+                    image.name.toLowerCase().includes(query) ||
+                    analysis.smartTags.some(tag => tag.toLowerCase().includes(query));
+                const matchesTag = !selectedTag || analysis.smartTags.includes(selectedTag);
+                return matchesQuery && matchesTag;
+            });
+
+            renderImages(filteredImages);
+        }
+
+        function sortImages() {
+            const sortOption = document.getElementById('sort-option').value;
+            let sortedImages = [...currentImages];
+
+            switch (sortOption) {
+                case 'newest':
+                    sortedImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    break;
+                case 'oldest':
+                    sortedImages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                    break;
+                case 'name':
+                    sortedImages.sort((a, b) => a.name.localeCompare(b.name));
+                    break;
+                case 'ai-score':
+                    sortedImages.sort((a, b) => {
+                        const scoreA = (aiAnalysisResults.get(a.url)?.confidence || 0);
+                        const scoreB = (aiAnalysisResults.get(b.url)?.confidence || 0);
+                        return scoreB - scoreA;
+                    });
+                    break;
+                case 'relevance':
+                    const query = document.getElementById('search-input').value.toLowerCase();
+                    if (query) {
+                        sortedImages.sort((a, b) => calculateSearchScore(b, query) - calculateSearchScore(a, query));
+                    }
+                    break;
+            }
+
+            renderImages(sortedImages);
+        }
+
+        function toggleTheme() {
+            const currentTheme = JSON.parse(localStorage.getItem('theme') || '{}');
+            const themes = [
+                { primary: '#3B82F6', secondary: '#10B981', accent: '#F59E0B' },
+                { primary: '#1E40AF', secondary: '#065F46', accent: '#B45309' }
+            ];
+            const nextTheme = themes[(themes.findIndex(t => t.primary === currentTheme.primary) + 1) % themes.length];
+            applyTheme(nextTheme);
+        }
+
     </script>
 </body>
 </html>
-
