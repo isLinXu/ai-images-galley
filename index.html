@@ -2838,6 +2838,13 @@
                     }
                 };
 
+                img.onerror = () => {
+                    const loadingIndicator = container.querySelector('.image-loading');
+                    if (loadingIndicator) {
+                        loadingIndicator.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i> <span class="text-red-500">加载失败</span>';
+                    }
+                };
+
                 card.addEventListener('click', () => openImageModal(image, images.indexOf(image)));
             }
 
