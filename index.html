@@ -1,13 +1,485 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Images Gallery</title>
-    <link rel="stylesheet" href="./src/styles/main.css">
+    <title>AI智能相册系统</title>
+    
+    <!-- 外部CSS库 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="src/styles/main.css">
+    
+    <!-- TensorFlow.js 和模型库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 </head>
-<body>
-    <div id="app"></div>
-    <script type="module" src="./dist/bundle.js"></script>
+<body class="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-900 dark:to-blue-900 min-h-screen transition-all duration-300">
+    <!-- 加载屏幕 -->
+    <div id="loading-screen" class="fixed inset-0 bg-white dark:bg-gray-900 z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-2">AI智能相册系统</h2>
+            <p class="text-gray-600 dark:text-gray-300">正在初始化...</p>
+            <div class="mt-4">
+                <div class="w-64 bg-gray-200 dark:bg-gray-700 rounded-full h-2 mx-auto">
+                    <div id="loading-progress" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="loading-status" class="text-sm text-gray-500 dark:text-gray-400 mt-2">准备中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 拖拽上传覆盖层 -->
+    <div id="drag-overlay" class="fixed inset-0 bg-blue-600 bg-opacity-90 z-40 hidden flex items-center justify-center">
+        <div class="text-center text-white">
+            <i class="fas fa-cloud-upload-alt text-6xl mb-4"></i>
+            <h3 class="text-2xl font-bold mb-2">拖拽图片到此处</h3>
+            <p class="text-lg opacity-90">支持多张图片同时上传</p>
+        </div>
+    </div>
+
+    <!-- 主导航栏 -->
+    <nav class="glass-effect sticky top-0 z-30 border-b border-white/20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo和标题 -->
+                <div class="flex items-center space-x-3">
+                    <div class="ai-badge">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h1 class="text-xl font-bold text-gray-800 dark:text-white">AI智能相册</h1>
+                </div>
+
+                <!-- 搜索栏 -->
+                <div class="flex-1 max-w-lg mx-8">
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            id="search-input" 
+                            placeholder="搜索图片、标签、描述..." 
+                            class="w-full px-4 py-2 pl-10 pr-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        >
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <button id="search-clear" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 hidden">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 工具栏 -->
+                <div class="flex items-center space-x-3">
+                    <!-- 上传按钮 -->
+                    <button id="upload-button" class="btn-primary">
+                        <i class="fas fa-upload mr-2"></i>
+                        上传图片
+                    </button>
+                    
+                    <!-- 视图切换 -->
+                    <div class="flex bg-white/20 dark:bg-gray-800/20 rounded-lg p-1">
+                        <button id="view-grid" class="view-btn active" data-view="grid" title="网格视图">
+                            <i class="fas fa-th"></i>
+                        </button>
+                        <button id="view-list" class="view-btn" data-view="list" title="列表视图">
+                            <i class="fas fa-list"></i>
+                        </button>
+                        <button id="view-masonry" class="view-btn" data-view="masonry" title="瀑布流">
+                            <i class="fas fa-columns"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- 主题切换 -->
+                    <button id="theme-toggle" class="p-2 rounded-lg bg-white/20 dark:bg-gray-800/20 hover:bg-white/30 dark:hover:bg-gray-700/30 transition-colors" title="切换主题">
+                        <i class="fas fa-moon dark:hidden"></i>
+                        <i class="fas fa-sun hidden dark:inline"></i>
+                    </button>
+                    
+                    <!-- 管理员按钮 -->
+                    <button id="admin-button" class="p-2 rounded-lg bg-white/20 dark:bg-gray-800/20 hover:bg-white/30 dark:hover:bg-gray-700/30 transition-colors" title="管理员登录">
+                        <i class="fas fa-user-shield"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 过滤器栏 -->
+    <div class="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div class="flex items-center justify-between">
+                <!-- 过滤器 -->
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">过滤器:</span>
+                    
+                    <!-- 日期范围 -->
+                    <select id="date-filter" class="filter-select">
+                        <option value="">所有时间</option>
+                        <option value="today">今天</option>
+                        <option value="week">本周</option>
+                        <option value="month">本月</option>
+                        <option value="year">今年</option>
+                    </select>
+                    
+                    <!-- 文件类型 -->
+                    <select id="type-filter" class="filter-select">
+                        <option value="">所有类型</option>
+                        <option value="jpg">JPG</option>
+                        <option value="png">PNG</option>
+                        <option value="gif">GIF</option>
+                        <option value="webp">WebP</option>
+                    </select>
+                    
+                    <!-- AI标签 -->
+                    <select id="ai-tag-filter" class="filter-select">
+                        <option value="">AI标签</option>
+                    </select>
+                    
+                    <!-- 清除过滤器 -->
+                    <button id="clear-filters" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                        清除过滤器
+                    </button>
+                </div>
+                
+                <!-- 排序和统计 -->
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600 dark:text-gray-400" id="image-count">0 张图片</span>
+                    
+                    <select id="sort-select" class="filter-select">
+                        <option value="name-asc">名称 A-Z</option>
+                        <option value="name-desc">名称 Z-A</option>
+                        <option value="date-desc">最新优先</option>
+                        <option value="date-asc">最旧优先</option>
+                        <option value="size-desc">大小降序</option>
+                        <option value="size-asc">大小升序</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- 图片库容器 -->
+        <div id="gallery-container" class="min-h-96">
+            <!-- 空状态 -->
+            <div id="empty-state" class="text-center py-16">
+                <div class="ai-badge mx-auto mb-4 text-4xl">
+                    <i class="fas fa-images"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-2">还没有图片</h3>
+                <p class="text-gray-600 dark:text-gray-400 mb-6">上传一些图片开始使用AI智能分析功能</p>
+                <button class="btn-primary" onclick="document.getElementById('upload-button').click()">
+                    <i class="fas fa-upload mr-2"></i>
+                    上传第一张图片
+                </button>
+            </div>
+            
+            <!-- 图片网格 -->
+            <div id="image-grid" class="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 hidden"></div>
+            
+            <!-- 图片列表 -->
+            <div id="image-list" class="space-y-4 hidden"></div>
+            
+            <!-- 瀑布流 -->
+            <div id="image-masonry" class="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-4 hidden"></div>
+        </div>
+        
+        <!-- 分页 -->
+        <div id="pagination" class="flex justify-center mt-8 hidden">
+            <nav class="flex items-center space-x-2">
+                <button id="prev-page" class="pagination-btn" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="page-numbers" class="flex space-x-1"></div>
+                <button id="next-page" class="pagination-btn">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </nav>
+        </div>
+    </main>
+
+    <!-- 图片详情模态框 -->
+    <div id="image-modal" class="modal hidden">
+        <div class="modal-content max-w-6xl max-h-[90vh] overflow-hidden">
+            <!-- 模态框头部 -->
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="modal-title">图片详情</h3>
+                <button class="modal-close text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- 模态框内容 -->
+            <div class="flex flex-col lg:flex-row h-full">
+                <!-- 图片显示区域 -->
+                <div class="flex-1 flex items-center justify-center bg-black/5 dark:bg-black/20 p-4">
+                    <img id="modal-image" class="max-w-full max-h-full object-contain rounded-lg shadow-lg" alt="">
+                </div>
+                
+                <!-- 信息面板 -->
+                <div class="w-full lg:w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
+                    <!-- 标签页导航 -->
+                    <div class="flex border-b border-gray-200 dark:border-gray-700">
+                        <button class="tab-btn active" data-tab="info">
+                            <i class="fas fa-info-circle mr-2"></i>信息
+                        </button>
+                        <button class="tab-btn" data-tab="ai">
+                            <i class="fas fa-brain mr-2"></i>AI分析
+                        </button>
+                        <button class="tab-btn" data-tab="notes">
+                            <i class="fas fa-sticky-note mr-2"></i>笔记
+                        </button>
+                    </div>
+                    
+                    <!-- 标签页内容 -->
+                    <div class="p-4">
+                        <!-- 基本信息标签页 -->
+                        <div id="tab-info" class="tab-content">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">文件名</label>
+                                    <p id="info-filename" class="text-sm text-gray-900 dark:text-white break-all"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">文件大小</label>
+                                    <p id="info-filesize" class="text-sm text-gray-900 dark:text-white"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">尺寸</label>
+                                    <p id="info-dimensions" class="text-sm text-gray-900 dark:text-white"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">上传时间</label>
+                                    <p id="info-upload-time" class="text-sm text-gray-900 dark:text-white"></p>
+                                </div>
+                                <div id="exif-info" class="hidden">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">EXIF信息</label>
+                                    <div id="exif-details" class="space-y-2 text-sm"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- AI分析标签页 -->
+                        <div id="tab-ai" class="tab-content hidden">
+                            <div class="space-y-4">
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">AI标签</label>
+                                        <button id="reanalyze-btn" class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400">
+                                            <i class="fas fa-sync-alt mr-1"></i>重新分析
+                                        </button>
+                                    </div>
+                                    <div id="ai-tags" class="flex flex-wrap gap-2"></div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AI描述</label>
+                                    <p id="ai-description" class="text-sm text-gray-900 dark:text-white"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">检测到的对象</label>
+                                    <div id="detected-objects" class="space-y-2"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 笔记标签页 -->
+                        <div id="tab-notes" class="tab-content hidden">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">自定义标签</label>
+                                    <div class="flex flex-wrap gap-2 mb-2" id="custom-tags"></div>
+                                    <div class="flex">
+                                        <input 
+                                            type="text" 
+                                            id="new-tag-input" 
+                                            placeholder="添加标签..." 
+                                            class="flex-1 px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-l-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        >
+                                        <button id="add-tag-btn" class="px-3 py-1 bg-blue-600 text-white text-sm rounded-r-md hover:bg-blue-700 transition-colors">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">笔记</label>
+                                    <textarea 
+                                        id="image-notes" 
+                                        rows="6" 
+                                        placeholder="添加笔记..." 
+                                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                    ></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="border-t border-gray-200 dark:border-gray-700 p-4">
+                        <div class="flex space-x-2">
+                            <button id="download-btn" class="btn-secondary flex-1">
+                                <i class="fas fa-download mr-2"></i>下载
+                            </button>
+                            <button id="share-btn" class="btn-secondary flex-1">
+                                <i class="fas fa-share mr-2"></i>分享
+                            </button>
+                            <button id="delete-btn" class="btn-danger flex-1">
+                                <i class="fas fa-trash mr-2"></i>删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员登录模态框 -->
+    <div id="admin-login-modal" class="modal hidden">
+        <div class="modal-content max-w-md">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-white">管理员登录</h3>
+                    <button class="modal-close text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <form id="admin-login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">GitHub Token</label>
+                        <div class="relative">
+                            <input 
+                                type="password" 
+                                id="github-token" 
+                                placeholder="输入GitHub Personal Access Token" 
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                required
+                            >
+                            <button type="button" id="toggle-token-visibility" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            需要具有仓库访问权限的GitHub Token
+                        </p>
+                    </div>
+                    
+                    <div id="login-error" class="hidden text-sm text-red-600 dark:text-red-400"></div>
+                    
+                    <div class="flex space-x-3">
+                        <button type="submit" class="btn-primary flex-1">
+                            <i class="fas fa-sign-in-alt mr-2"></i>登录
+                        </button>
+                        <button type="button" class="btn-secondary modal-close">取消</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员面板模态框 -->
+    <div id="admin-panel-modal" class="modal hidden">
+        <div class="modal-content max-w-4xl max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white">管理员面板</h3>
+                <div class="flex items-center space-x-3">
+                    <span class="text-sm text-gray-600 dark:text-gray-400">管理员模式</span>
+                    <button id="admin-logout" class="text-sm text-red-600 hover:text-red-800 dark:text-red-400">
+                        <i class="fas fa-sign-out-alt mr-1"></i>退出
+                    </button>
+                    <button class="modal-close text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 管理员标签页 -->
+            <div class="flex border-b border-gray-200 dark:border-gray-700">
+                <button class="admin-tab-btn active" data-tab="logs">
+                    <i class="fas fa-list-alt mr-2"></i>活动日志
+                </button>
+                <button class="admin-tab-btn" data-tab="stats">
+                    <i class="fas fa-chart-bar mr-2"></i>系统统计
+                </button>
+                <button class="admin-tab-btn" data-tab="security">
+                    <i class="fas fa-shield-alt mr-2"></i>安全设置
+                </button>
+            </div>
+            
+            <!-- 管理员内容区域 -->
+            <div class="p-4 overflow-y-auto" style="max-height: calc(90vh - 120px);">
+                <!-- 活动日志标签页 -->
+                <div id="admin-tab-logs" class="admin-tab-content">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-md font-medium text-gray-800 dark:text-white">活动日志</h4>
+                        <div class="flex space-x-2">
+                            <button id="export-logs" class="btn-secondary text-sm">
+                                <i class="fas fa-download mr-1"></i>导出
+                            </button>
+                            <button id="clear-logs" class="btn-danger text-sm">
+                                <i class="fas fa-trash mr-1"></i>清空
+                            </button>
+                        </div>
+                    </div>
+                    <div id="admin-logs-content" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                </div>
+                
+                <!-- 系统统计标签页 -->
+                <div id="admin-tab-stats" class="admin-tab-content hidden">
+                    <h4 class="text-md font-medium text-gray-800 dark:text-white mb-4">系统统计</h4>
+                    <div id="admin-stats-content" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                </div>
+                
+                <!-- 安全设置标签页 -->
+                <div id="admin-tab-security" class="admin-tab-content hidden">
+                    <h4 class="text-md font-medium text-gray-800 dark:text-white mb-4">安全设置</h4>
+                    <div id="admin-security-content" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进度条模态框 -->
+    <div id="progress-modal" class="modal hidden">
+        <div class="modal-content max-w-md">
+            <div class="p-6 text-center">
+                <div class="mb-4">
+                    <i id="progress-icon" class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
+                </div>
+                <h3 id="progress-title" class="text-lg font-semibold text-gray-800 dark:text-white mb-2">处理中...</h3>
+                <p id="progress-message" class="text-gray-600 dark:text-gray-400 mb-4">请稍候</p>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div id="progress-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="progress-percent" class="text-sm text-gray-500 dark:text-gray-400 mt-2">0%</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示消息容器 -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- 确认对话框 -->
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content max-w-md">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <i id="confirm-icon" class="fas fa-question-circle text-2xl text-yellow-500 mr-3"></i>
+                    <h3 id="confirm-title" class="text-lg font-semibold text-gray-800 dark:text-white">确认操作</h3>
+                </div>
+                <p id="confirm-message" class="text-gray-600 dark:text-gray-400 mb-6">您确定要执行此操作吗？</p>
+                <div class="flex space-x-3">
+                    <button id="confirm-yes" class="btn-primary flex-1">确定</button>
+                    <button id="confirm-no" class="btn-secondary flex-1">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript模块 -->
+    <script type="module" src="dist/bundle.js"></script>
 </body>
 </html>
