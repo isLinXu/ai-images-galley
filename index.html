@@ -253,6 +253,18 @@
             color: white;
             font-weight: 600;
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .admin-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+        }
+        
+        .admin-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .loading-spinner {
@@ -262,6 +274,15 @@
             width: 24px;
             height: 24px;
             animation: spin 1s linear infinite;
+        }
+        
+        .loading-spinner.inline-block {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-width: 2px;
+            margin: 0;
+            vertical-align: middle;
         }
 
         @keyframes spin {
@@ -840,14 +861,34 @@
     </div>
 
     <div id="admin-login-modal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center p-4">
-        <div class="glass-effect rounded-2xl max-w-md w-full p-6 modal-content">
+        <div class="glass-effect rounded-2xl max-w-lg w-full p-6 modal-content">
             <h2 class="text-2xl font-bold high-contrast-text mb-6 text-center">
                 <i class="fas fa-key mr-2"></i>管理员登录
             </h2>
-            <div class="mb-4">
+            <div class="mb-6">
                 <label class="block high-contrast-text text-sm font-semibold mb-2">GitHub Personal Access Token:</label>
-                <input type="password" id="github-token" placeholder="输入您的GitHub Token..." 
-                       class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:outline-none high-contrast-text bg-white/90">
+                <div class="relative">
+                    <input type="password" id="github-token" placeholder="输入您的GitHub Token..." 
+                           class="w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 focus:border-blue-500 focus:outline-none high-contrast-text bg-white/90">
+                    <button type="button" onclick="toggleTokenVisibility()" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700">
+                        <i id="token-visibility-icon" class="fas fa-eye"></i>
+                    </button>
+                </div>
+                <div class="mt-3 space-y-2">
+                    <p class="text-xs text-gray-600">需要具有repo权限的Token才能上传图片</p>
+                    <details class="text-xs text-gray-600">
+                        <summary class="cursor-pointer hover:text-blue-600 font-medium">📖 如何获取GitHub Token？</summary>
+                        <div class="mt-2 p-3 bg-blue-50 rounded border-l-4 border-blue-500">
+                            <ol class="list-decimal list-inside space-y-1 text-gray-700">
+                                <li>访问 <a href="https://github.com/settings/tokens" target="_blank" class="text-blue-600 hover:underline">GitHub Settings → Personal access tokens</a></li>
+                                <li>点击 "Generate new token (classic)"</li>
+                                <li>选择 "repo" 权限范围</li>
+                                <li>生成并复制Token</li>
+                            </ol>
+                            <p class="mt-2 text-amber-600 font-medium">⚠️ Token只显示一次，请妥善保存</p>
+                        </div>
+                    </details>
+                </div>
             </div>
             <div class="flex gap-3">
                 <button onclick="handleAdminLogin()" class="flex-1 admin-btn px-6 py-3 rounded-lg font-semibold">
@@ -856,6 +897,71 @@
                 <button onclick="closeAdminModal()" class="flex-1 theme-btn px-6 py-3 rounded-lg">
                     取消
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员面板模态框 -->
+    <div id="admin-panel-modal" class="fixed inset-0 modal-overlay z-50 hidden flex items-center justify-center p-4">
+        <div class="glass-effect rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden modal-content">
+            <div class="p-6 border-b border-white/20">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold high-contrast-text">
+                        <i class="fas fa-cog mr-2"></i>管理员面板
+                    </h2>
+                    <button onclick="closeAdminPanel()" class="theme-btn px-4 py-2 rounded-lg">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex h-[calc(90vh-120px)]">
+                <!-- 侧边栏 -->
+                <div class="w-64 border-r border-white/20 p-4">
+                    <nav class="space-y-2">
+                        <button onclick="showAdminTab('logs')" class="admin-tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-colors" data-tab="logs">
+                            <i class="fas fa-history mr-2"></i>活动日志
+                        </button>
+                        <button onclick="showAdminTab('stats')" class="admin-tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-colors" data-tab="stats">
+                            <i class="fas fa-chart-bar mr-2"></i>系统统计
+                        </button>
+                        <button onclick="showAdminTab('security')" class="admin-tab-btn w-full text-left px-4 py-3 rounded-lg hover:bg-white/10 transition-colors" data-tab="security">
+                            <i class="fas fa-shield-alt mr-2"></i>安全设置
+                        </button>
+                    </nav>
+                </div>
+                
+                <!-- 主内容区 -->
+                <div class="flex-1 p-6 overflow-y-auto">
+                    <!-- 活动日志标签页 -->
+                    <div id="admin-tab-logs" class="admin-tab-content hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold high-contrast-text">活动日志</h3>
+                            <button onclick="clearAdminLogs()" class="admin-btn px-4 py-2 rounded-lg text-sm">
+                                <i class="fas fa-trash mr-1"></i>清除日志
+                            </button>
+                        </div>
+                        <div id="admin-logs-container" class="space-y-2 max-h-96 overflow-y-auto">
+                            <!-- 日志内容将在这里动态加载 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 系统统计标签页 -->
+                    <div id="admin-tab-stats" class="admin-tab-content hidden">
+                        <h3 class="text-lg font-semibold high-contrast-text mb-4">系统统计</h3>
+                        <div id="admin-stats-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- 统计内容将在这里动态加载 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 安全设置标签页 -->
+                    <div id="admin-tab-security" class="admin-tab-content hidden">
+                        <h3 class="text-lg font-semibold high-contrast-text mb-4">安全设置</h3>
+                        <div id="admin-security-container" class="space-y-4">
+                            <!-- 安全设置内容将在这里动态加载 -->
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -876,6 +982,108 @@
         let preloadedImages = new Set();
         let tensorflowModels = {};
         let isModelLoaded = false;
+        let loginAttempts = 0;
+        const MAX_LOGIN_ATTEMPTS = 5;
+        const LOGIN_COOLDOWN = 300000; // 5分钟
+        
+        // 安全性和验证函数
+        function validateGitHubToken(token) {
+            // GitHub Personal Access Token 格式验证
+            const tokenPattern = /^gh[ps]_[a-zA-Z0-9]{36,}$/;
+            const classicTokenPattern = /^[a-f0-9]{40}$/;
+            
+            if (!token || token.length < 20) {
+                return { valid: false, message: 'Token长度不足，请检查是否完整' };
+            }
+            
+            if (!tokenPattern.test(token) && !classicTokenPattern.test(token)) {
+                return { valid: false, message: 'Token格式不正确，请确保使用有效的GitHub Token' };
+            }
+            
+            return { valid: true };
+        }
+        
+        function checkLoginCooldown() {
+            const lastFailedLogin = localStorage.getItem('last_failed_login');
+            if (lastFailedLogin) {
+                const timeDiff = Date.now() - parseInt(lastFailedLogin);
+                if (timeDiff < LOGIN_COOLDOWN) {
+                    const remainingTime = Math.ceil((LOGIN_COOLDOWN - timeDiff) / 60000);
+                    return { inCooldown: true, remainingMinutes: remainingTime };
+                }
+            }
+            return { inCooldown: false };
+        }
+        
+        function recordFailedLogin() {
+            loginAttempts++;
+            if (loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+                localStorage.setItem('last_failed_login', Date.now().toString());
+                loginAttempts = 0;
+            }
+        }
+        
+        function clearLoginAttempts() {
+            loginAttempts = 0;
+            localStorage.removeItem('last_failed_login');
+        }
+        
+        function toggleTokenVisibility() {
+            const tokenInput = document.getElementById('github-token');
+            const visibilityIcon = document.getElementById('token-visibility-icon');
+            
+            if (tokenInput.type === 'password') {
+                tokenInput.type = 'text';
+                visibilityIcon.className = 'fas fa-eye-slash';
+            } else {
+                tokenInput.type = 'password';
+                visibilityIcon.className = 'fas fa-eye';
+            }
+        }
+        
+        // 会话管理
+        const SESSION_TIMEOUT = 3600000; // 1小时
+        let sessionCheckInterval = null;
+        
+        function startSessionMonitoring() {
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+            }
+            
+            sessionCheckInterval = setInterval(() => {
+                if (isAdmin) {
+                    const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+                    const loginTime = new Date(adminUser.login_time).getTime();
+                    const currentTime = Date.now();
+                    
+                    if (currentTime - loginTime > SESSION_TIMEOUT) {
+                        // 记录会话超时
+                        const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+                        const log = {
+                            timestamp: new Date().toISOString(),
+                            user: adminUser.login || 'unknown',
+                            action: 'SESSION_TIMEOUT',
+                            details: '会话超时自动退出',
+                            userAgent: navigator.userAgent.substring(0, 100)
+                        };
+                        const logs = JSON.parse(localStorage.getItem('admin_logs') || '[]');
+                        logs.unshift(log);
+                        if (logs.length > 50) logs.splice(50);
+                        localStorage.setItem('admin_logs', JSON.stringify(logs));
+                        
+                        showTooltip('⚠️ 会话已过期，请重新登录');
+                        logout();
+                    }
+                }
+            }, 60000); // 每分钟检查一次
+        }
+        
+        function stopSessionMonitoring() {
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+                sessionCheckInterval = null;
+            }
+        }
 
         // TensorFlow.js 模型管理器
         class TensorFlowModelManager {
@@ -1836,11 +2044,37 @@
             initializeSettings();
         }
 
-        function checkAdminStatus() {
+        async function checkAdminStatus() {
             const token = localStorage.getItem('github_token');
             const adminStatus = localStorage.getItem('admin_status');
-            if (token && adminStatus === 'true') {
-                setAdminMode(true);
+            const adminUser = localStorage.getItem('admin_user');
+            
+            if (token && adminStatus === 'true' && adminUser) {
+                try {
+                    // 验证Token是否仍然有效
+                    const response = await fetch('https://api.github.com/user', {
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        setAdminMode(true);
+                        console.log('✅ 管理员状态验证成功');
+                    } else {
+                        // Token已失效，清除登录状态
+                        logout();
+                        showTooltip('⚠️ 登录已过期，请重新登录');
+                    }
+                } catch (error) {
+                    console.warn('管理员状态验证失败:', error);
+                    // 网络错误时保持登录状态，但显示警告
+                    setAdminMode(true);
+                    showTooltip('⚠️ 网络连接异常，部分功能可能受限');
+                }
+            } else {
+                setAdminMode(false);
             }
         }
 
@@ -1849,17 +2083,36 @@
             const userStatus = document.getElementById('user-status');
             const uploadSection = document.getElementById('image-upload-section');
 
-            userStatus.innerHTML = admin ? `
-                <span class="high-contrast-text font-medium">管理员模式</span>
-                <button onclick="logout()" class="admin-btn px-4 py-2 rounded-lg">
-                    <i class="fas fa-sign-out-alt mr-2"></i>退出登录
-                </button>
-            ` : `
-                <span class="high-contrast-text font-medium">游客模式</span>
-                <button onclick="showAdminLogin()" class="theme-btn px-4 py-2 rounded-lg">
-                    <i class="fas fa-sign-in-alt mr-2"></i>管理员登录
-                </button>
-            `;
+            if (admin) {
+                const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+                const loginTime = adminUser.login_time ? new Date(adminUser.login_time) : new Date();
+                const timeAgo = getTimeAgo(loginTime);
+                
+                userStatus.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        ${adminUser.avatar_url ? `<img src="${adminUser.avatar_url}" alt="头像" class="w-8 h-8 rounded-full">` : ''}
+                        <div class="flex flex-col">
+                            <span class="high-contrast-text font-medium text-sm">管理员模式</span>
+                            <span class="high-contrast-text text-xs opacity-75">${adminUser.name || adminUser.login || '管理员'} • ${timeAgo}</span>
+                        </div>
+                        <button onclick="showAdminPanel()" class="admin-btn px-3 py-2 rounded-lg text-sm mr-2">
+                            <i class="fas fa-cog mr-1"></i>管理
+                        </button>
+                        <button onclick="logout()" class="admin-btn px-3 py-2 rounded-lg text-sm">
+                            <i class="fas fa-sign-out-alt mr-1"></i>退出
+                        </button>
+                    </div>
+                `;
+                startSessionMonitoring();
+            } else {
+                userStatus.innerHTML = `
+                    <span class="high-contrast-text font-medium">游客模式</span>
+                    <button onclick="showAdminLogin()" class="theme-btn px-4 py-2 rounded-lg">
+                        <i class="fas fa-sign-in-alt mr-2"></i>管理员登录
+                    </button>
+                `;
+                stopSessionMonitoring();
+            }
             
             uploadSection.classList.toggle('hidden', !admin);
         }
@@ -1875,50 +2128,408 @@
 
         async function handleAdminLogin() {
             const token = document.getElementById('github-token').value.trim();
+            const loginBtn = document.querySelector('#admin-login-modal button[onclick="handleAdminLogin()"]');
+            
+            // 检查登录冷却时间
+            const cooldownCheck = checkLoginCooldown();
+            if (cooldownCheck.inCooldown) {
+                showTooltip(`❌ 登录失败次数过多，请等待 ${cooldownCheck.remainingMinutes} 分钟后重试`);
+                return;
+            }
+            
             if (!token) {
                 showTooltip('请输入GitHub Token');
                 return;
             }
+            
+            // 验证Token格式
+            const tokenValidation = validateGitHubToken(token);
+            if (!tokenValidation.valid) {
+                showTooltip(`❌ ${tokenValidation.message}`);
+                return;
+            }
+
+            // 显示加载状态
+            const originalText = loginBtn.innerHTML;
+            loginBtn.innerHTML = '<div class="loading-spinner inline-block mr-2"></div>验证中...';
+            loginBtn.disabled = true;
 
             try {
-                const response = await fetch('https://api.github.com/user', {
+                // 验证Token有效性
+                const userResponse = await fetch('https://api.github.com/user', {
                     headers: {
                         'Authorization': `token ${token}`,
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 });
 
-                if (response.ok) {
-                    const scopesResponse = await fetch('https://api.github.com/rate_limit', {
-                        headers: {
-                            'Authorization': `token ${token}`,
-                            'Accept': 'application/vnd.github.v3+json'
-                        }
-                    });
-                    const scopes = response.headers.get('X-OAuth-Scopes') || '';
-                    if (!scopes.includes('repo')) {
-                        showTooltip('Token缺少repo权限，请检查');
-                        return;
-                    }
-
-                    localStorage.setItem('github_token', token);
-                    localStorage.setItem('admin_status', 'true');
-                    setAdminMode(true);
-                    closeAdminModal();
-                    showTooltip('✅ 管理员登录成功！');
-                } else {
-                    showTooltip('❌ GitHub Token验证失败');
+                if (!userResponse.ok) {
+                    const errorData = await userResponse.json();
+                    recordFailedLogin();
+                    throw new Error(errorData.message || 'Token验证失败');
                 }
+
+                const userData = await userResponse.json();
+                
+                // 检查Token权限
+                const repoResponse = await fetch('https://api.github.com/repos/isLinXu/ai-images-galley', {
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (!repoResponse.ok) {
+                    recordFailedLogin();
+                    throw new Error('Token缺少访问仓库的权限，请确保Token具有repo权限');
+                }
+
+                // 验证写入权限
+                const permissionsResponse = await fetch('https://api.github.com/repos/isLinXu/ai-images-galley/collaborators/' + userData.login + '/permission', {
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (permissionsResponse.ok) {
+                    const permissionData = await permissionsResponse.json();
+                    if (!['admin', 'write'].includes(permissionData.permission)) {
+                        recordFailedLogin();
+                        throw new Error('您没有写入权限，请联系仓库管理员');
+                    }
+                }
+
+                // 登录成功，清除失败记录
+                clearLoginAttempts();
+                
+                // 保存登录信息
+                localStorage.setItem('github_token', token);
+                localStorage.setItem('admin_status', 'true');
+                localStorage.setItem('admin_user', JSON.stringify({
+                    login: userData.login,
+                    name: userData.name,
+                    avatar_url: userData.avatar_url,
+                    login_time: new Date().toISOString()
+                }));
+                
+                setAdminMode(true);
+                closeAdminModal();
+                
+                // 记录登录活动
+                logAdminActivity('LOGIN', `用户 ${userData.login} 登录成功`);
+                showTooltip(`✅ 欢迎，${userData.name || userData.login}！管理员登录成功`);
+                
             } catch (error) {
-                showTooltip('❌ 网络错误，请稍后重试');
+                console.error('登录失败:', error);
+                showTooltip(`❌ 登录失败: ${error.message}`);
+            } finally {
+                // 恢复按钮状态
+                loginBtn.innerHTML = originalText;
+                loginBtn.disabled = false;
             }
         }
 
         function logout() {
-            localStorage.removeItem('github_token');
-            localStorage.removeItem('admin_status');
-            setAdminMode(false);
-            showTooltip('已退出管理员模式');
+            if (confirm('确定要退出管理员模式吗？')) {
+                // 记录退出活动
+                logAdminActivity('LOGOUT', '管理员主动退出');
+                
+                localStorage.removeItem('github_token');
+                localStorage.removeItem('admin_status');
+                localStorage.removeItem('admin_user');
+                stopSessionMonitoring();
+                setAdminMode(false);
+                showTooltip('✅ 已安全退出管理员模式');
+                
+                // 清除敏感数据
+                document.getElementById('github-token').value = '';
+            }
+        }
+        
+        function getTimeAgo(date) {
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            
+            if (diffMins < 1) return '刚刚';
+            if (diffMins < 60) return `${diffMins}分钟前`;
+            if (diffHours < 24) return `${diffHours}小时前`;
+            return date.toLocaleDateString();
+        }
+        
+        // 管理员活动日志
+        function logAdminActivity(action, details = '') {
+            // 允许在某些情况下记录日志，即使不是管理员状态
+            const forceLog = ['LOGIN', 'LOGOUT', 'SESSION_TIMEOUT'].includes(action);
+            if (!isAdmin && !forceLog) return;
+            
+            const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+            const log = {
+                timestamp: new Date().toISOString(),
+                user: adminUser.login || 'unknown',
+                action: action,
+                details: details,
+                userAgent: navigator.userAgent.substring(0, 100)
+            };
+            
+            const logs = JSON.parse(localStorage.getItem('admin_logs') || '[]');
+            logs.unshift(log);
+            
+            // 只保留最近50条记录
+            if (logs.length > 50) {
+                logs.splice(50);
+            }
+            
+            localStorage.setItem('admin_logs', JSON.stringify(logs));
+        }
+        
+        function getAdminLogs() {
+            return JSON.parse(localStorage.getItem('admin_logs') || '[]');
+        }
+        
+        function clearAdminLogs() {
+            if (isAdmin && confirm('确定要清除所有管理员活动日志吗？')) {
+                localStorage.removeItem('admin_logs');
+                logAdminActivity('CLEAR_LOGS', '清除了所有活动日志');
+                showTooltip('✅ 活动日志已清除');
+                loadAdminLogs(); // 刷新日志显示
+            }
+        }
+        
+        // 管理员面板功能
+        function showAdminPanel() {
+            if (!isAdmin) return;
+            
+            document.getElementById('admin-panel-modal').classList.remove('hidden');
+            showAdminTab('logs'); // 默认显示日志标签页
+        }
+        
+        function closeAdminPanel() {
+            document.getElementById('admin-panel-modal').classList.add('hidden');
+        }
+        
+        function showAdminTab(tabName) {
+            // 隐藏所有标签页内容
+            document.querySelectorAll('.admin-tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // 移除所有标签按钮的活动状态
+            document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+                btn.classList.remove('bg-white/20');
+            });
+            
+            // 显示选中的标签页
+            document.getElementById(`admin-tab-${tabName}`).classList.remove('hidden');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('bg-white/20');
+            
+            // 加载对应的内容
+            switch(tabName) {
+                case 'logs':
+                    loadAdminLogs();
+                    break;
+                case 'stats':
+                    loadAdminStats();
+                    break;
+                case 'security':
+                    loadAdminSecurity();
+                    break;
+            }
+        }
+        
+        function loadAdminLogs() {
+            const container = document.getElementById('admin-logs-container');
+            const logs = getAdminLogs();
+            
+            if (logs.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-8">暂无活动日志</p>';
+                return;
+            }
+            
+            container.innerHTML = logs.map(log => {
+                const date = new Date(log.timestamp);
+                const timeAgo = getTimeAgo(date);
+                
+                let actionIcon = 'fas fa-info-circle';
+                let actionColor = 'text-blue-500';
+                
+                switch(log.action) {
+                    case 'LOGIN':
+                        actionIcon = 'fas fa-sign-in-alt';
+                        actionColor = 'text-green-500';
+                        break;
+                    case 'LOGOUT':
+                        actionIcon = 'fas fa-sign-out-alt';
+                        actionColor = 'text-orange-500';
+                        break;
+                    case 'SESSION_TIMEOUT':
+                        actionIcon = 'fas fa-clock';
+                        actionColor = 'text-red-500';
+                        break;
+                    case 'UPLOAD_IMAGES':
+                        actionIcon = 'fas fa-upload';
+                        actionColor = 'text-purple-500';
+                        break;
+                    case 'CLEAR_LOGS':
+                        actionIcon = 'fas fa-trash';
+                        actionColor = 'text-gray-500';
+                        break;
+                }
+                
+                return `
+                    <div class="bg-white/5 rounded-lg p-4 border border-white/10">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-center space-x-3">
+                                <i class="${actionIcon} ${actionColor}"></i>
+                                <div>
+                                    <div class="font-medium high-contrast-text">${log.action}</div>
+                                    <div class="text-sm text-gray-400">${log.details}</div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        用户: ${log.user} • ${timeAgo}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                ${date.toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function loadAdminStats() {
+            const container = document.getElementById('admin-stats-container');
+            const logs = getAdminLogs();
+            const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+            
+            // 统计数据
+            const loginCount = logs.filter(log => log.action === 'LOGIN').length;
+            const uploadCount = logs.filter(log => log.action === 'UPLOAD_IMAGES').length;
+            const sessionTimeouts = logs.filter(log => log.action === 'SESSION_TIMEOUT').length;
+            const totalImages = currentImages.length;
+            
+            // 最近登录时间
+            const lastLogin = adminUser.login_time ? new Date(adminUser.login_time) : null;
+            
+            container.innerHTML = `
+                <div class="stats-card bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-2xl font-bold text-green-500">${loginCount}</div>
+                            <div class="text-sm text-gray-400">总登录次数</div>
+                        </div>
+                        <i class="fas fa-sign-in-alt text-green-500 text-2xl"></i>
+                    </div>
+                </div>
+                
+                <div class="stats-card bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-2xl font-bold text-purple-500">${uploadCount}</div>
+                            <div class="text-sm text-gray-400">图片上传次数</div>
+                        </div>
+                        <i class="fas fa-upload text-purple-500 text-2xl"></i>
+                    </div>
+                </div>
+                
+                <div class="stats-card bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-2xl font-bold text-blue-500">${totalImages}</div>
+                            <div class="text-sm text-gray-400">图库总图片数</div>
+                        </div>
+                        <i class="fas fa-images text-blue-500 text-2xl"></i>
+                    </div>
+                </div>
+                
+                <div class="stats-card bg-white/5 rounded-lg p-4 border border-white/10">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-2xl font-bold text-red-500">${sessionTimeouts}</div>
+                            <div class="text-sm text-gray-400">会话超时次数</div>
+                        </div>
+                        <i class="fas fa-clock text-red-500 text-2xl"></i>
+                    </div>
+                </div>
+                
+                <div class="col-span-full bg-white/5 rounded-lg p-4 border border-white/10">
+                    <h4 class="font-semibold high-contrast-text mb-3">会话信息</h4>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">当前用户:</span>
+                            <span class="high-contrast-text">${adminUser.name || adminUser.login || '未知'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">最近登录:</span>
+                            <span class="high-contrast-text">${lastLogin ? getTimeAgo(lastLogin) : '未知'}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">会话状态:</span>
+                            <span class="text-green-500">活跃</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function loadAdminSecurity() {
+            const container = document.getElementById('admin-security-container');
+            const cooldownStatus = checkLoginCooldown();
+            
+            container.innerHTML = `
+                <div class="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <h4 class="font-semibold high-contrast-text mb-3">登录安全</h4>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">最大登录尝试次数:</span>
+                            <span class="high-contrast-text">${MAX_LOGIN_ATTEMPTS}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">登录冷却时间:</span>
+                            <span class="high-contrast-text">${LOGIN_COOLDOWN / 60000} 分钟</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">当前状态:</span>
+                            <span class="${cooldownStatus.inCooldown ? 'text-red-500' : 'text-green-500'}">
+                                ${cooldownStatus.inCooldown ? `冷却中 (${cooldownStatus.remainingMinutes}分钟)` : '正常'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <h4 class="font-semibold high-contrast-text mb-3">会话管理</h4>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">会话超时时间:</span>
+                            <span class="high-contrast-text">${SESSION_TIMEOUT / 3600000} 小时</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-400">监控状态:</span>
+                            <span class="${sessionCheckInterval ? 'text-green-500' : 'text-red-500'}">
+                                ${sessionCheckInterval ? '运行中' : '已停止'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white/5 rounded-lg p-4 border border-white/10">
+                    <h4 class="font-semibold high-contrast-text mb-3">操作</h4>
+                    <div class="space-y-2">
+                        <button onclick="clearLoginAttempts(); showTooltip('✅ 登录尝试记录已清除'); loadAdminSecurity();" 
+                                class="w-full admin-btn px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-eraser mr-2"></i>清除登录尝试记录
+                        </button>
+                        <button onclick="if(confirm('确定要强制退出当前会话吗？')) logout();" 
+                                class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+                            <i class="fas fa-sign-out-alt mr-2"></i>强制退出会话
+                        </button>
+                    </div>
+                </div>
+            `;
         }
 
         async function uploadImagesToGitHub() {
@@ -2008,6 +2619,11 @@
                 ? `<span class="text-green-500">成功上传 ${newImages.length}/${files.length} 张图片</span>`
                 : '<span class="text-red-500">上传失败</span>';
 
+            // 记录上传活动
+            if (newImages.length > 0) {
+                logAdminActivity('UPLOAD_IMAGES', `上传了 ${newImages.length} 张图片: ${newImages.map(img => img.name).join(', ')}`);
+            }
+            
             // 自动刷新图库
             if (newImages.length > 0 && document.getElementById('auto-refresh-after-upload').checked) {
                 currentImages = [...currentImages, ...newImages];
