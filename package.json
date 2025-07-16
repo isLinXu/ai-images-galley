@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "build": "esbuild src/js/app.js --bundle --outfile=dist/bundle.js --format=esm"
+  },
   "dependencies": {
     "esbuild": "^0.25.6"
   }
