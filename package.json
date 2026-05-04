@@ -1,8 +1,37 @@
 {
+  "name": "ai-images-galley",
+  "version": "1.0.0",
+  "description": "基于AI的智能图片管理和分析系统",
+  "type": "module",
   "scripts": {
-    "build": "esbuild src/js/app.js --bundle --outfile=dist/bundle.js --format=esm"
+    "build": "esbuild src/js/app.js --bundle --outfile=dist/bundle.js --format=esm",
+    "build:watch": "esbuild src/js/app.js --bundle --outfile=dist/bundle.js --format=esm --watch",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "format": "prettier --write \"src/**/*.{js,css,html}\" \"*.html\" \"*.md\"",
+    "format:check": "prettier --check \"src/**/*.{js,css,html}\" \"*.html\" \"*.md\"",
+    "dev": "npm run build && npm run format",
+    "verify": "npm run lint && npm run format:check && npm run build"
   },
   "dependencies": {
     "esbuild": "^0.25.6"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "prettier": "^3.2.0"
+  },
+  "keywords": [
+    "ai",
+    "image",
+    "gallery",
+    "tensorflow",
+    "pwa"
+  ],
+  "author": "isLinXu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:isLinXu/ai-images-galley.git"
   }
 }

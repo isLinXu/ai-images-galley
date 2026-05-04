@@ -3,10 +3,11 @@
  * 负责界面组件的创建、管理、交互和状态管理
  */
 
-import { CONFIG, ERROR_MESSAGES, SUCCESS_MESSAGES } from './config.js';
-import { DOMUtils, StringUtils, TimeUtils, ThrottleUtils } from './utils.js';
+import { CONFIG } from './config.js';
+import { StringUtils, ThrottleUtils } from './utils.js';
 import eventManager from './eventManager.js';
 import storageManager from './storageManager.js';
+import { uiLogger } from './logger.js';
 
 /**
  * 模态框管理器
@@ -17,7 +18,7 @@ class ModalManager {
         this.modalStack = [];
         this.escapeKeyHandler = this._handleEscapeKey.bind(this);
         this.backdropClickHandler = this._handleBackdropClick.bind(this);
-        
+
         this._bindGlobalEvents();
     }
 
@@ -28,11 +29,14 @@ class ModalManager {
      */
     show(modalId, options = {}) {
         const {
-            closeOnEscape = true,
-            closeOnBackdrop = true,
+            // eslint-disable-next-line no-unused-vars
+            closeOnEscape: closeOnEscape = true,
+            // eslint-disable-next-line no-unused-vars
+            closeOnBackdrop: closeOnBackdrop = true,
             focus = true,
             onShow = null,
-            onHide = null
+            // eslint-disable-next-line no-unused-vars
+            onHide: onHide = null
         } = options;
 
         const modal = document.getElementById(modalId);
@@ -52,19 +56,19 @@ class ModalManager {
         // 显示模态框
         modal.style.display = 'flex';
         modal.classList.add('active');
-        
+
         // 设置焦点
         if (focus) {
             this._setModalFocus(modal);
         }
-        
+
         // 禁用背景滚动
         document.body.style.overflow = 'hidden';
-        
+
         // 触发显示事件
         if (onShow) onShow(modal);
         eventManager.emit('modal:show', { modalId, modal });
-        
+
         // 添加动画类
         requestAnimationFrame(() => {
             modal.classList.add('show');
@@ -88,21 +92,21 @@ class ModalManager {
 
         // 添加隐藏动画
         modal.classList.remove('show');
-        
+
         setTimeout(() => {
             modal.style.display = 'none';
             modal.classList.remove('active');
-            
+
             // 恢复焦点
             if (modalInfo?.previousFocus) {
                 modalInfo.previousFocus.focus();
             }
-            
+
             // 如果没有其他模态框，恢复背景滚动
             if (this.activeModals.size === 0) {
                 document.body.style.overflow = '';
             }
-            
+
             // 触发隐藏事件
             if (modalInfo?.options.onHide) {
                 modalInfo.options.onHide(modal);
@@ -128,7 +132,7 @@ class ModalManager {
         const focusableElements = modal.querySelectorAll(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
         );
-        
+
         if (focusableElements.length > 0) {
             focusableElements[0].focus();
         }
@@ -155,10 +159,10 @@ class ModalManager {
      */
     _handleBackdropClick(event) {
         if (this.modalStack.length === 0) return;
-        
+
         const topModal = this.modalStack[this.modalStack.length - 1];
         const modal = document.getElementById(topModal.id);
-        
+
         if (event.target === modal && topModal.options.closeOnBackdrop !== false) {
             this.hide(topModal.id);
         }
@@ -190,7 +194,7 @@ class TooltipManager {
         this.activeTooltips = new Map();
         this.tooltipContainer = null;
         this.hideTimeout = null;
-        
+
         this._createContainer();
     }
 
@@ -203,6 +207,7 @@ class TooltipManager {
         const {
             type = 'info', // info, success, warning, error
             duration = 3000,
+            // eslint-disable-next-line no-unused-vars
             position = 'top-right',
             closable = true,
             html = false
@@ -210,25 +215,25 @@ class TooltipManager {
 
         const tooltip = this._createTooltip(message, { type, closable, html });
         const tooltipId = StringUtils.generateId();
-        
+
         tooltip.setAttribute('data-tooltip-id', tooltipId);
         this.activeTooltips.set(tooltipId, tooltip);
-        
+
         // 添加到容器
         this.tooltipContainer.appendChild(tooltip);
-        
+
         // 添加显示动画
         requestAnimationFrame(() => {
             tooltip.classList.add('show');
         });
-        
+
         // 自动隐藏
         if (duration > 0) {
             setTimeout(() => {
                 this.hide(tooltipId);
             }, duration);
         }
-        
+
         return tooltipId;
     }
 
@@ -239,9 +244,9 @@ class TooltipManager {
     hide(tooltipId) {
         const tooltip = this.activeTooltips.get(tooltipId);
         if (!tooltip) return;
-        
+
         tooltip.classList.remove('show');
-        
+
         setTimeout(() => {
             if (tooltip.parentNode) {
                 tooltip.parentNode.removeChild(tooltip);
@@ -257,23 +262,65 @@ class TooltipManager {
      * @returns {HTMLElement} 提示框元素
      * @private
      */
+    /**
+     * 清理HTML，只允许安全标签
+     * @param {string} html - HTML字符串
+     * @returns {string} 清理后的HTML
+     * @private
+     */
+    _sanitizeHtml(html) {
+        if (!html) return '';
+        const allowedTags = ['b', 'i', 'u', 'em', 'strong', 'span', 'br', 'p', 'small'];
+        const allowedAttributes = ['class', 'style'];
+
+        const div = document.createElement('div');
+        div.innerHTML = html;
+
+        const clean = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) return;
+
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                const tagName = node.tagName.toLowerCase();
+                if (!allowedTags.includes(tagName)) {
+                    // 替换为文本内容
+                    const text = document.createTextNode(node.textContent);
+                    node.parentNode.replaceChild(text, node);
+                    return;
+                }
+
+                // 清理不允许的属性
+                Array.from(node.attributes).forEach(attr => {
+                    if (!allowedAttributes.includes(attr.name.toLowerCase())) {
+                        node.removeAttribute(attr.name);
+                    }
+                });
+
+                // 递归清理子节点
+                Array.from(node.childNodes).forEach(child => clean(child));
+            }
+        };
+
+        Array.from(div.childNodes).forEach(node => clean(node));
+        return div.innerHTML;
+    }
+
     _createTooltip(message, options) {
         const { type, closable, html } = options;
-        
+
         const tooltip = document.createElement('div');
         tooltip.className = `tooltip tooltip-${type}`;
-        
+
         const content = document.createElement('div');
         content.className = 'tooltip-content';
-        
+
         if (html) {
-            content.innerHTML = message;
+            content.innerHTML = this._sanitizeHtml(message);
         } else {
             content.textContent = message;
         }
-        
+
         tooltip.appendChild(content);
-        
+
         // 添加关闭按钮
         if (closable) {
             const closeBtn = document.createElement('button');
@@ -285,7 +332,7 @@ class TooltipManager {
             };
             tooltip.appendChild(closeBtn);
         }
-        
+
         return tooltip;
     }
 
@@ -349,7 +396,7 @@ class ProgressManager {
     constructor() {
         this.activeProgress = new Map();
         this.progressContainer = null;
-        
+
         this._createContainer();
     }
 
@@ -373,20 +420,20 @@ class ProgressManager {
             showCancel,
             onCancel
         });
-        
+
         this.activeProgress.set(id, {
             element: progressElement,
             options,
             value: 0
         });
-        
+
         this.progressContainer.appendChild(progressElement);
-        
+
         // 添加显示动画
         requestAnimationFrame(() => {
             progressElement.classList.add('show');
         });
-        
+
         return id;
     }
 
@@ -399,25 +446,25 @@ class ProgressManager {
     update(id, value, message = '') {
         const progress = this.activeProgress.get(id);
         if (!progress) return;
-        
+
         progress.value = Math.max(0, Math.min(100, value));
-        
+
         const progressBar = progress.element.querySelector('.progress-bar');
         const progressText = progress.element.querySelector('.progress-text');
         const progressPercentage = progress.element.querySelector('.progress-percentage');
-        
+
         if (progressBar) {
             progressBar.style.width = `${progress.value}%`;
         }
-        
+
         if (progressText && message) {
             progressText.textContent = message;
         }
-        
+
         if (progressPercentage) {
             progressPercentage.textContent = `${Math.round(progress.value)}%`;
         }
-        
+
         // 触发进度更新事件
         eventManager.emit('progress:update', {
             id,
@@ -433,7 +480,7 @@ class ProgressManager {
      */
     complete(id, message = '完成') {
         this.update(id, 100, message);
-        
+
         setTimeout(() => {
             this.remove(id);
         }, 1000);
@@ -446,9 +493,9 @@ class ProgressManager {
     remove(id) {
         const progress = this.activeProgress.get(id);
         if (!progress) return;
-        
+
         progress.element.classList.remove('show');
-        
+
         setTimeout(() => {
             if (progress.element.parentNode) {
                 progress.element.parentNode.removeChild(progress.element);
@@ -466,14 +513,14 @@ class ProgressManager {
      */
     _createProgressElement(id, options) {
         const { title, showPercentage, showCancel, onCancel } = options;
-        
+
         const element = document.createElement('div');
         element.className = 'progress-item';
         element.setAttribute('data-progress-id', id);
-        
+
         element.innerHTML = `
             <div class="progress-header">
-                <span class="progress-title">${title}</span>
+                <span class="progress-title">${StringUtils.escapeHtml(title)}</span>
                 ${showPercentage ? '<span class="progress-percentage">0%</span>' : ''}
                 ${showCancel ? '<button class="progress-cancel">×</button>' : ''}
             </div>
@@ -482,7 +529,7 @@ class ProgressManager {
             </div>
             <div class="progress-text"></div>
         `;
-        
+
         // 绑定取消按钮事件
         if (showCancel && onCancel) {
             const cancelBtn = element.querySelector('.progress-cancel');
@@ -491,7 +538,7 @@ class ProgressManager {
                 this.remove(id);
             };
         }
-        
+
         return element;
     }
 
@@ -533,7 +580,7 @@ class LoadingManager {
         this.loadingStates = new Map();
         this.globalLoading = false;
         this.loadingOverlay = null;
-        
+
         this._createOverlay();
     }
 
@@ -558,15 +605,15 @@ class LoadingManager {
             spinner,
             startTime: Date.now()
         };
-        
+
         this.loadingStates.set(id, loadingState);
-        
+
         if (global) {
             this._showGlobalLoading(message, spinner);
         } else if (target) {
             this._showTargetLoading(target, message, spinner);
         }
-        
+
         eventManager.emit('loading:show', { id, options });
     }
 
@@ -577,17 +624,17 @@ class LoadingManager {
     hide(id) {
         const loadingState = this.loadingStates.get(id);
         if (!loadingState) return;
-        
+
         const duration = Date.now() - loadingState.startTime;
-        
+
         if (loadingState.global) {
             this._hideGlobalLoading();
         } else if (loadingState.target) {
             this._hideTargetLoading(loadingState.target);
         }
-        
+
         this.loadingStates.delete(id);
-        
+
         eventManager.emit('loading:hide', {
             id,
             duration
@@ -602,16 +649,16 @@ class LoadingManager {
      */
     _showGlobalLoading(message, spinner) {
         if (this.globalLoading) return;
-        
+
         this.globalLoading = true;
         this.loadingOverlay.style.display = 'flex';
-        
+
         const messageEl = this.loadingOverlay.querySelector('.loading-message');
         const spinnerEl = this.loadingOverlay.querySelector('.loading-spinner');
-        
+
         if (messageEl) messageEl.textContent = message;
         if (spinnerEl) spinnerEl.style.display = spinner ? 'block' : 'none';
-        
+
         requestAnimationFrame(() => {
             this.loadingOverlay.classList.add('show');
         });
@@ -623,10 +670,10 @@ class LoadingManager {
      */
     _hideGlobalLoading() {
         if (!this.globalLoading) return;
-        
+
         this.globalLoading = false;
         this.loadingOverlay.classList.remove('show');
-        
+
         setTimeout(() => {
             this.loadingOverlay.style.display = 'none';
         }, 300);
@@ -641,17 +688,17 @@ class LoadingManager {
      */
     _showTargetLoading(target, message, spinner) {
         if (!target) return;
-        
+
         const loadingEl = document.createElement('div');
         loadingEl.className = 'target-loading';
         loadingEl.innerHTML = `
             ${spinner ? '<div class="loading-spinner"></div>' : ''}
-            <div class="loading-message">${message}</div>
+            <div class="loading-message">${StringUtils.escapeHtml(message)}</div>
         `;
-        
+
         target.style.position = 'relative';
         target.appendChild(loadingEl);
-        
+
         requestAnimationFrame(() => {
             loadingEl.classList.add('show');
         });
@@ -664,7 +711,7 @@ class LoadingManager {
      */
     _hideTargetLoading(target) {
         if (!target) return;
-        
+
         const loadingEl = target.querySelector('.target-loading');
         if (loadingEl) {
             loadingEl.classList.remove('show');
@@ -697,14 +744,14 @@ class LoadingManager {
             opacity: 0;
             transition: opacity 0.3s ease;
         `;
-        
+
         this.loadingOverlay.innerHTML = `
             <div class="loading-content">
                 <div class="loading-spinner"></div>
                 <div class="loading-message">加载中...</div>
             </div>
         `;
-        
+
         document.body.appendChild(this.loadingOverlay);
     }
 
@@ -733,7 +780,7 @@ class ThemeManager {
         this.currentTheme = 'light';
         this.themes = CONFIG.THEMES;
         this.transitionDuration = 300;
-        
+
         this._loadSavedTheme();
         this._bindEvents();
     }
@@ -747,30 +794,30 @@ class ThemeManager {
             console.error(`主题不存在: ${themeName}`);
             return;
         }
-        
+
         const oldTheme = this.currentTheme;
         this.currentTheme = themeName;
-        
+
         // 添加过渡效果
         document.body.style.transition = `all ${this.transitionDuration}ms ease`;
-        
+
         // 移除旧主题类
         document.body.classList.remove(`theme-${oldTheme}`);
-        
+
         // 添加新主题类
         document.body.classList.add(`theme-${themeName}`);
-        
+
         // 更新CSS变量
         this._updateCSSVariables(this.themes[themeName]);
-        
+
         // 保存主题设置
         storageManager.specializedStorage.userPreferences.set('theme', themeName);
-        
+
         // 移除过渡效果
         setTimeout(() => {
             document.body.style.transition = '';
         }, this.transitionDuration);
-        
+
         // 触发主题变更事件
         eventManager.emitThemeChanged({
             oldTheme,
@@ -786,7 +833,7 @@ class ThemeManager {
         const themeNames = Object.keys(this.themes);
         const currentIndex = themeNames.indexOf(this.currentTheme);
         const nextIndex = (currentIndex + 1) % themeNames.length;
-        
+
         this.setTheme(themeNames[nextIndex]);
     }
 
@@ -814,7 +861,7 @@ class ThemeManager {
      */
     _updateCSSVariables(themeData) {
         const root = document.documentElement;
-        
+
         Object.entries(themeData).forEach(([key, value]) => {
             if (typeof value === 'string') {
                 root.style.setProperty(`--${key}`, value);
@@ -862,7 +909,7 @@ class ThemeManager {
      */
     setAutoTheme(enabled) {
         storageManager.specializedStorage.userPreferences.set('autoTheme', enabled);
-        
+
         if (enabled) {
             const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
             this.setTheme(prefersDark ? 'dark' : 'light');
@@ -878,7 +925,7 @@ class ResponsiveManager {
         this.breakpoints = CONFIG.UI.BREAKPOINTS;
         this.currentBreakpoint = null;
         this.resizeHandler = ThrottleUtils.throttle(this._handleResize.bind(this), 250);
-        
+
         this._init();
     }
 
@@ -898,7 +945,7 @@ class ResponsiveManager {
     _handleResize() {
         const oldBreakpoint = this.currentBreakpoint;
         this._updateBreakpoint();
-        
+
         if (oldBreakpoint !== this.currentBreakpoint) {
             eventManager.emit('responsive:breakpoint-change', {
                 oldBreakpoint,
@@ -914,13 +961,13 @@ class ResponsiveManager {
      */
     _updateBreakpoint() {
         const width = window.innerWidth;
-        
+
         for (const [name, minWidth] of Object.entries(this.breakpoints)) {
             if (width >= minWidth) {
                 this.currentBreakpoint = name;
             }
         }
-        
+
         // 更新body类
         document.body.className = document.body.className
             .replace(/\bbreakpoint-\w+\b/g, '')
@@ -972,7 +1019,7 @@ class UIManager {
         this.loadingManager = new LoadingManager();
         this.themeManager = new ThemeManager();
         this.responsiveManager = new ResponsiveManager();
-        
+
         this.initialized = false;
         this._bindEvents();
     }
@@ -982,19 +1029,19 @@ class UIManager {
      */
     async initialize() {
         if (this.initialized) return;
-        
+
         try {
             // 初始化各个管理器
             await this._initializeComponents();
-            
+
             // 设置全局UI事件监听器
             this._setupGlobalListeners();
-            
+
             this.initialized = true;
-            
+
             eventManager.emit('ui:initialized');
-            console.log('UI管理器初始化完成');
-            
+            uiLogger.info('UI管理器初始化完成');
+
         } catch (error) {
             console.error('UI管理器初始化失败:', error);
             throw error;
@@ -1017,10 +1064,10 @@ class UIManager {
     _setupGlobalListeners() {
         // 监听键盘快捷键
         document.addEventListener('keydown', this._handleGlobalKeydown.bind(this));
-        
+
         // 监听点击事件（用于关闭下拉菜单等）
         document.addEventListener('click', this._handleGlobalClick.bind(this));
-        
+
         // 监听滚动事件
         window.addEventListener('scroll', ThrottleUtils.throttle(this._handleGlobalScroll.bind(this), 100));
     }
@@ -1036,13 +1083,13 @@ class UIManager {
             event.preventDefault();
             eventManager.emit('ui:search-shortcut');
         }
-        
+
         // Ctrl/Cmd + T: 切换主题
         if ((event.ctrlKey || event.metaKey) && event.key === 't') {
             event.preventDefault();
             this.themeManager.toggleTheme();
         }
-        
+
         // F11: 全屏切换
         if (event.key === 'F11') {
             event.preventDefault();
@@ -1071,14 +1118,14 @@ class UIManager {
      */
     _handleGlobalScroll() {
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        
+
         // 更新滚动位置类
         if (scrollTop > 100) {
             document.body.classList.add('scrolled');
         } else {
             document.body.classList.remove('scrolled');
         }
-        
+
         // 触发滚动事件
         eventManager.emit('ui:scroll', { scrollTop });
     }
@@ -1109,43 +1156,43 @@ class UIManager {
             cancelText = '取消',
             type = 'warning'
         } = options;
-        
+
         return new Promise((resolve) => {
             // 创建确认对话框
             const dialog = document.createElement('div');
             dialog.className = `confirm-dialog confirm-${type}`;
             dialog.innerHTML = `
                 <div class="confirm-content">
-                    <h3 class="confirm-title">${title}</h3>
-                    <p class="confirm-message">${message}</p>
+                    <h3 class="confirm-title">${StringUtils.escapeHtml(title)}</h3>
+                    <p class="confirm-message">${StringUtils.escapeHtml(message)}</p>
                     <div class="confirm-actions">
-                        <button class="btn btn-secondary confirm-cancel">${cancelText}</button>
-                        <button class="btn btn-primary confirm-ok">${confirmText}</button>
+                        <button class="btn btn-secondary confirm-cancel">${StringUtils.escapeHtml(cancelText)}</button>
+                        <button class="btn btn-primary confirm-ok">${StringUtils.escapeHtml(confirmText)}</button>
                     </div>
                 </div>
             `;
-            
+
             // 添加事件监听器
             const okBtn = dialog.querySelector('.confirm-ok');
             const cancelBtn = dialog.querySelector('.confirm-cancel');
-            
+
             const cleanup = () => {
                 document.body.removeChild(dialog);
             };
-            
+
             okBtn.onclick = () => {
                 cleanup();
                 resolve(true);
             };
-            
+
             cancelBtn.onclick = () => {
                 cleanup();
                 resolve(false);
             };
-            
+
             // 添加到页面
             document.body.appendChild(dialog);
-            
+
             // 聚焦到确定按钮
             okBtn.focus();
         });
@@ -1169,11 +1216,11 @@ class UIManager {
         // 清理各个管理器
         this.tooltipManager.clear();
         this.modalManager.hideAll();
-        
+
         // 移除事件监听器
         window.removeEventListener('resize', this.responsiveManager.resizeHandler);
-        
-        console.log('UI管理器资源已清理');
+
+        uiLogger.info('UI管理器资源已清理');
     }
 
     /**

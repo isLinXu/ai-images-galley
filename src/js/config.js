@@ -11,7 +11,7 @@ export const CONFIG = {
         SESSION_TIMEOUT: 3600000, // 1小时
         TOKEN_MIN_LENGTH: 20
     },
-    
+
     // AI模型配置
     AI: {
         ANALYSIS_QUEUE_SIZE: 10,
@@ -19,7 +19,7 @@ export const CONFIG = {
         CONFIDENCE_THRESHOLD: 0.3,
         MAX_CACHE_SIZE: 100
     },
-    
+
     // 图片配置
     IMAGE: {
         MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
@@ -27,7 +27,7 @@ export const CONFIG = {
         THUMBNAIL_SIZE: 240,
         COMPRESSION_QUALITY: 0.8
     },
-    
+
     // UI配置
     UI: {
         TOOLTIP_DURATION: 3000,
@@ -35,21 +35,21 @@ export const CONFIG = {
         SEARCH_DEBOUNCE: 300,
         PRELOAD_COUNT: 5
     },
-    
+
     // 存储配置
     STORAGE: {
         MAX_LOGS: 50,
         MAX_NOTES_LENGTH: 1000,
         CACHE_EXPIRY: 24 * 60 * 60 * 1000 // 24小时
     },
-    
+
     // GitHub配置
     GITHUB: {
         API_BASE: 'https://api.github.com',
         UPLOAD_TIMEOUT: 30000,
         RETRY_COUNT: 3
     },
-    
+
     // 主题配置
     THEMES: [
         {

@@ -3,10 +3,10 @@
  * 负责图像的加载、处理、缓存、元数据管理等功能
  */
 
-import { CONFIG, ERROR_MESSAGES, SUCCESS_MESSAGES } from './config.js';
-import { FileUtils, StringUtils, AsyncUtils, ValidationUtils, DOMUtils } from './utils.js';
+import { CONFIG } from './config.js';
+import { FileUtils, StringUtils } from './utils.js';
 import eventManager from './eventManager.js';
-import storageManager from './storageManager.js';
+import { imageLogger } from './logger.js';
 
 /**
  * 图像元数据管理器
@@ -89,35 +89,30 @@ class ImageMetadataManager {
      * @returns {Promise<Object>} EXIF数据
      * @private
      */
-    async _extractExifData(file) {
-        try {
-            // 这里可以集成EXIF.js库来提取详细的EXIF信息
-            // 目前返回基础信息
-            return {
-                camera: null,
-                lens: null,
-                settings: {
-                    iso: null,
-                    aperture: null,
-                    shutterSpeed: null,
-                    focalLength: null
-                },
-                location: {
-                    latitude: null,
-                    longitude: null,
-                    altitude: null
-                },
-                datetime: {
-                    taken: null,
-                    digitized: null,
-                    modified: null
-                },
-                orientation: 1
-            };
-        } catch (error) {
-            console.warn('EXIF数据提取失败:', error);
-            return {};
-        }
+    async _extractExifData(_file) {
+        // 这里可以集成EXIF.js库来提取详细的EXIF信息
+        // 目前返回基础信息
+        return {
+            camera: null,
+            lens: null,
+            settings: {
+                iso: null,
+                aperture: null,
+                shutterSpeed: null,
+                focalLength: null
+            },
+            location: {
+                latitude: null,
+                longitude: null,
+                altitude: null
+            },
+            datetime: {
+                taken: null,
+                digitized: null,
+                modified: null
+            },
+            orientation: 1
+        };
     }
 
     /**
@@ -128,7 +123,7 @@ class ImageMetadataManager {
      */
     _computeDerivedProperties(metadata) {
         const { basic } = metadata;
-        
+
         return {
             orientation: this._determineOrientation(basic.aspectRatio),
             quality: this._assessImageQuality(basic, metadata.fileSize),
@@ -160,7 +155,7 @@ class ImageMetadataManager {
     _assessImageQuality(basic, fileSize) {
         const { width, height, megapixels } = basic;
         const compressionRatio = fileSize / (width * height * 3); // 假设24位色深
-        
+
         if (megapixels >= 12 && compressionRatio > 0.1) return 'high';
         if (megapixels >= 6 && compressionRatio > 0.05) return 'medium';
         return 'low';
@@ -175,7 +170,7 @@ class ImageMetadataManager {
     _categorizeByDimensions(basic) {
         const { width, height } = basic;
         const maxDimension = Math.max(width, height);
-        
+
         if (maxDimension >= 4000) return 'ultra-high';
         if (maxDimension >= 2000) return 'high';
         if (maxDimension >= 1000) return 'medium';
@@ -190,7 +185,7 @@ class ImageMetadataManager {
      */
     _categorizeBySizeCategory(fileSize) {
         const sizeMB = fileSize / (1024 * 1024);
-        
+
         if (sizeMB >= 10) return 'large';
         if (sizeMB >= 5) return 'medium';
         if (sizeMB >= 1) return 'small';
@@ -380,9 +375,9 @@ class ImageCacheManager {
      */
     _calculateThumbnailSize(originalWidth, originalHeight, maxSize) {
         const aspectRatio = originalWidth / originalHeight;
-        
+
         let width, height;
-        
+
         if (originalWidth > originalHeight) {
             width = Math.min(originalWidth, maxSize);
             height = width / aspectRatio;
@@ -390,7 +385,7 @@ class ImageCacheManager {
             height = Math.min(originalHeight, maxSize);
             width = height * aspectRatio;
         }
-        
+
         return {
             width: Math.round(width),
             height: Math.round(height)
@@ -415,14 +410,14 @@ class ImageCacheManager {
     _evictLeastRecentlyUsed() {
         let oldestKey = null;
         let oldestTime = Date.now();
-        
+
         for (const [key, item] of this.cache.entries()) {
             if (item.lastAccessed < oldestTime) {
                 oldestTime = item.lastAccessed;
                 oldestKey = key;
             }
         }
-        
+
         if (oldestKey) {
             const item = this.cache.get(oldestKey);
             URL.revokeObjectURL(item.url);
@@ -437,14 +432,14 @@ class ImageCacheManager {
     _evictLeastRecentlyUsedThumbnail() {
         let oldestKey = null;
         let oldestTime = Date.now();
-        
+
         for (const [key, item] of this.thumbnailCache.entries()) {
             if (item.lastAccessed < oldestTime) {
                 oldestTime = item.lastAccessed;
                 oldestKey = key;
             }
         }
-        
+
         if (oldestKey) {
             const item = this.thumbnailCache.get(oldestKey);
             URL.revokeObjectURL(item.url);
@@ -463,7 +458,7 @@ class ImageCacheManager {
         for (const item of this.thumbnailCache.values()) {
             URL.revokeObjectURL(item.url);
         }
-        
+
         this.cache.clear();
         this.thumbnailCache.clear();
     }
@@ -489,14 +484,14 @@ class ImageCacheManager {
      */
     _calculateTotalMemoryUsage() {
         let total = 0;
-        
+
         for (const item of this.cache.values()) {
             total += item.size || 0;
         }
-        
+
         // 缩略图通常较小，简单估算
         total += this.thumbnailCache.size * 10000; // 假设每个缩略图10KB
-        
+
         return total;
     }
 }
@@ -580,18 +575,18 @@ class ImageProcessor {
      */
     _calculateCompressedSize(originalWidth, originalHeight, maxWidth, maxHeight) {
         let { width, height } = { width: originalWidth, height: originalHeight };
-        
+
         // 按比例缩放
         if (width > maxWidth) {
             height = (height * maxWidth) / width;
             width = maxWidth;
         }
-        
+
         if (height > maxHeight) {
             width = (width * maxHeight) / height;
             height = maxHeight;
         }
-        
+
         return {
             width: Math.round(width),
             height: Math.round(height)
@@ -610,17 +605,17 @@ class ImageProcessor {
                 const radians = (degrees * Math.PI) / 180;
                 const cos = Math.abs(Math.cos(radians));
                 const sin = Math.abs(Math.sin(radians));
-                
+
                 const newWidth = img.naturalWidth * cos + img.naturalHeight * sin;
                 const newHeight = img.naturalWidth * sin + img.naturalHeight * cos;
-                
+
                 this.canvas.width = newWidth;
                 this.canvas.height = newHeight;
-                
+
                 this.ctx.translate(newWidth / 2, newHeight / 2);
                 this.ctx.rotate(radians);
                 this.ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-                
+
                 this.canvas.toBlob((blob) => {
                     if (blob) {
                         const url = URL.createObjectURL(blob);
@@ -646,11 +641,11 @@ class ImageProcessor {
             try {
                 this.canvas.width = img.naturalWidth;
                 this.canvas.height = img.naturalHeight;
-                
+
                 // 应用CSS滤镜
                 this.ctx.filter = this._getFilterCSS(filter);
                 this.ctx.drawImage(img, 0, 0);
-                
+
                 this.canvas.toBlob((blob) => {
                     if (blob) {
                         const url = URL.createObjectURL(blob);
@@ -681,7 +676,7 @@ class ImageProcessor {
             'saturate': 'saturate(150%)',
             'vintage': 'sepia(50%) contrast(120%) brightness(110%)'
         };
-        
+
         return filters[filter] || 'none';
     }
 }
@@ -698,7 +693,7 @@ class ImageManager {
         this.loadingPromises = new Map();
         this.supportedFormats = CONFIG.IMAGE.SUPPORTED_FORMATS;
         this.isInitialized = false;
-        
+
         // 绑定事件监听器
         this._bindEvents();
     }
@@ -711,16 +706,16 @@ class ImageManager {
         if (this.isInitialized) {
             return;
         }
-        
+
         try {
-            console.log('ImageManager: 正在初始化图片管理器...');
-            
+            imageLogger.info('ImageManager: 正在初始化图片管理器...');
+
             // 这里可以添加任何需要的初始化逻辑
             // 比如预加载某些资源、验证配置等
-            
+
             this.isInitialized = true;
-            console.log('ImageManager: 图片管理器初始化完成');
-            
+            imageLogger.info('ImageManager: 图片管理器初始化完成');
+
         } catch (error) {
             console.error('ImageManager: 初始化失败:', error);
             throw error;
@@ -744,17 +739,17 @@ class ImageManager {
         try {
             // 生成缓存键
             const cacheKey = this._generateCacheKey(source);
-            
+
             // 检查缓存
             if (useCache && this.loadedImages.has(cacheKey)) {
                 return this.loadedImages.get(cacheKey);
             }
-            
+
             // 检查是否正在加载
             if (this.loadingPromises.has(cacheKey)) {
                 return this.loadingPromises.get(cacheKey);
             }
-            
+
             // 开始加载
             const loadingPromise = this._loadImageInternal(source, {
                 generateThumbnail,
@@ -762,20 +757,20 @@ class ImageManager {
                 cacheKey,
                 priority
             });
-            
+
             this.loadingPromises.set(cacheKey, loadingPromise);
-            
+
             const result = await loadingPromise;
-            
+
             // 缓存结果
             if (useCache) {
                 this.loadedImages.set(cacheKey, result);
             }
-            
+
             this.loadingPromises.delete(cacheKey);
-            
+
             return result;
-            
+
         } catch (error) {
             console.error('图像加载失败:', error);
             throw error;
@@ -791,14 +786,14 @@ class ImageManager {
      */
     async _loadImageInternal(source, options) {
         const { generateThumbnail, extractMetadata, cacheKey, priority } = options;
-        
+
         // 触发加载开始事件
         eventManager.emitImageLoading({
             cacheKey,
             source: source instanceof File ? source.name : source,
             priority
         });
-        
+
         const imageObj = {
             id: StringUtils.generateId(),
             cacheKey,
@@ -810,7 +805,7 @@ class ImageManager {
             loadedAt: new Date(),
             error: null
         };
-        
+
         try {
             // 创建图像URL
             if (source instanceof File) {
@@ -818,13 +813,13 @@ class ImageManager {
             } else {
                 imageObj.url = source;
             }
-            
+
             // 创建图像元素
             imageObj.element = await this._createImageElement(imageObj.url);
-            
+
             // 并行执行元数据提取和缩略图生成
             const tasks = [];
-            
+
             if (extractMetadata && source instanceof File) {
                 tasks.push(
                     this.metadataManager.extractMetadata(source)
@@ -837,7 +832,7 @@ class ImageManager {
                         })
                 );
             }
-            
+
             if (generateThumbnail) {
                 tasks.push(
                     this.cacheManager.generateThumbnail(source)
@@ -850,29 +845,29 @@ class ImageManager {
                         })
                 );
             }
-            
+
             await Promise.allSettled(tasks);
-            
+
             // 缓存图像
             this.cacheManager.set(cacheKey, imageObj.url, imageObj.metadata);
-            
+
             // 触发加载完成事件
             eventManager.emitImageLoaded({
                 imageObj,
                 loadTime: Date.now() - imageObj.loadedAt.getTime()
             });
-            
+
             return imageObj;
-            
+
         } catch (error) {
             imageObj.error = error;
-            
+
             // 触发加载失败事件
             eventManager.emit('image:load-failed', {
                 cacheKey,
                 error: error.message
             });
-            
+
             throw error;
         }
     }
@@ -886,10 +881,10 @@ class ImageManager {
     _createImageElement(url) {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            
+
             img.onload = () => resolve(img);
             img.onerror = () => reject(new Error('图像加载失败'));
-            
+
             img.src = url;
         });
     }
@@ -918,10 +913,10 @@ class ImageManager {
             concurrency = CONFIG.IMAGE.CONCURRENT_LOADS,
             onProgress = null
         } = options;
-        
+
         const results = [];
         let completed = 0;
-        
+
         // 分批处理
         for (let i = 0; i < sources.length; i += concurrency) {
             const batch = sources.slice(i, i + concurrency);
@@ -929,7 +924,7 @@ class ImageManager {
                 try {
                     const result = await this.loadImage(source, options);
                     completed++;
-                    
+
                     if (onProgress) {
                         onProgress({
                             completed,
@@ -937,7 +932,7 @@ class ImageManager {
                             percentage: (completed / sources.length) * 100
                         });
                     }
-                    
+
                     return result;
                 } catch (error) {
                     completed++;
@@ -945,11 +940,11 @@ class ImageManager {
                     return null;
                 }
             });
-            
+
             const batchResults = await Promise.allSettled(batchPromises);
             results.push(...batchResults.map(r => r.status === 'fulfilled' ? r.value : null));
         }
-        
+
         return results.filter(Boolean);
     }
 
@@ -960,21 +955,21 @@ class ImageManager {
      */
     validateImageFile(file) {
         const errors = [];
-        
+
         // 检查文件类型
         if (!this.supportedFormats.includes(file.type)) {
             errors.push(`不支持的文件格式: ${file.type}`);
         }
-        
+
         // 检查文件大小
         if (file.size > CONFIG.IMAGE.MAX_FILE_SIZE) {
             errors.push(`文件过大: ${FileUtils.formatSize(file.size)} > ${FileUtils.formatSize(CONFIG.IMAGE.MAX_FILE_SIZE)}`);
         }
-        
+
         if (file.size === 0) {
             errors.push('文件为空');
         }
-        
+
         return {
             valid: errors.length === 0,
             errors
@@ -1004,7 +999,7 @@ class ImageManager {
             if (imageObj.thumbnailUrl) {
                 URL.revokeObjectURL(imageObj.thumbnailUrl);
             }
-            
+
             this.loadedImages.delete(cacheKey);
         }
     }
@@ -1022,7 +1017,7 @@ class ImageManager {
                 URL.revokeObjectURL(imageObj.thumbnailUrl);
             }
         }
-        
+
         this.loadedImages.clear();
         this.loadingPromises.clear();
         this.cacheManager.clear();
@@ -1035,13 +1030,13 @@ class ImageManager {
     async getAllImages() {
         // 返回所有已加载的图片对象
         const images = Array.from(this.loadedImages.values());
-        
+
         // 如果没有图片，返回空数组
         if (images.length === 0) {
-            console.log('ImageManager: 当前没有已加载的图片');
+            imageLogger.info('ImageManager: 当前没有已加载的图片');
             return [];
         }
-        
+
         return images;
     }
 
@@ -1067,13 +1062,13 @@ class ImageManager {
         window.addEventListener('beforeunload', () => {
             this.clear();
         });
-        
+
         // 监听内存压力事件
         if ('memory' in performance) {
             setInterval(() => {
                 const memInfo = performance.memory;
                 const usageRatio = memInfo.usedJSHeapSize / memInfo.jsHeapSizeLimit;
-                
+
                 if (usageRatio > 0.8) {
                     console.warn('内存使用率过高，清理图像缓存');
                     this._cleanupMemory();
@@ -1090,17 +1085,17 @@ class ImageManager {
         // 清理最旧的50%图像
         const images = Array.from(this.loadedImages.entries())
             .sort((a, b) => a[1].loadedAt - b[1].loadedAt);
-        
+
         const toRemove = images.slice(0, Math.floor(images.length * 0.5));
-        
+
         for (const [cacheKey] of toRemove) {
             this.removeImage(cacheKey);
         }
-        
+
         // 清理缓存管理器
         this.cacheManager.clear();
-        
-        console.log(`已清理 ${toRemove.length} 个图像以释放内存`);
+
+        imageLogger.info(`已清理 ${toRemove.length} 个图像以释放内存`);
     }
 }
 

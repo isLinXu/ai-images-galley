@@ -4,14 +4,16 @@
  */
 
 import { CONFIG } from './config.js';
-import { DOMUtils, AsyncUtils } from './utils.js';
+import { LazyLoader } from './utils.js';
 import eventManager from './eventManager.js';
 import storageManager from './storageManager.js';
 import uiManager from './uiManager.js';
 import imageManager from './imageManager.js';
 import aiEngine from './aiEngine.js';
 import galleryManager from './galleryManager.js';
+import galleryRenderer from './galleryRenderer.js';
 import adminManager from './adminManager.js';
+import appLogger from './logger.js';
 
 /**
  * 应用程序状态管理器
@@ -27,10 +29,10 @@ class AppStateManager {
             fullscreenMode: false,
             keyboardShortcutsEnabled: true
         };
-        
+
         this.stateHistory = [];
         this.maxHistorySize = 50;
-        
+
         this._bindEvents();
     }
 
@@ -51,7 +53,7 @@ class AppStateManager {
     setState(key, value) {
         // 保存当前状态到历史
         this._saveStateToHistory();
-        
+
         if (typeof key === 'object') {
             // 批量更新
             Object.assign(this.state, key);
@@ -59,7 +61,7 @@ class AppStateManager {
             // 单个更新
             this.state[key] = value;
         }
-        
+
         // 触发状态变化事件
         eventManager.emit('app:state-changed', {
             key: typeof key === 'object' ? Object.keys(key) : [key],
@@ -91,7 +93,7 @@ class AppStateManager {
             fullscreenMode: false,
             keyboardShortcutsEnabled: true
         };
-        
+
         this.setState(initialState);
     }
 
@@ -102,7 +104,7 @@ class AppStateManager {
         if (this.stateHistory.length > 0) {
             const previousState = this.stateHistory.pop();
             this.state = { ...previousState };
-            
+
             eventManager.emit('app:state-restored', {
                 restoredState: { ...this.state },
                 timestamp: Date.now()
@@ -116,7 +118,7 @@ class AppStateManager {
      */
     _saveStateToHistory() {
         this.stateHistory.push({ ...this.state });
-        
+
         // 限制历史大小
         if (this.stateHistory.length > this.maxHistorySize) {
             this.stateHistory.shift();
@@ -132,12 +134,12 @@ class AppStateManager {
         document.addEventListener('visibilitychange', () => {
             this.setState('isPageVisible', !document.hidden);
         });
-        
+
         // 监听在线状态变化
         window.addEventListener('online', () => {
             this.setState('isOnline', true);
         });
-        
+
         window.addEventListener('offline', () => {
             this.setState('isOnline', false);
         });
@@ -152,7 +154,7 @@ class KeyboardShortcutManager {
         this.appStateManager = appStateManager;
         this.shortcuts = new Map();
         this.isEnabled = true;
-        
+
         this._initializeShortcuts();
         this._bindEvents();
     }
@@ -165,7 +167,7 @@ class KeyboardShortcutManager {
      */
     register(combination, handler, options = {}) {
         const normalizedCombo = this._normalizeShortcut(combination);
-        
+
         this.shortcuts.set(normalizedCombo, {
             handler,
             description: options.description || '',
@@ -215,13 +217,13 @@ class KeyboardShortcutManager {
                 searchInput.focus();
             }
         }, { description: '聚焦搜索框', category: 'gallery' });
-        
+
         this.register('ctrl+a', () => {
             const images = galleryManager.getDisplayedImages();
             const selectedImages = new Set(images.map(img => img.id));
             this.appStateManager.setState('selectedImages', selectedImages);
         }, { description: '全选图片', category: 'gallery' });
-        
+
         this.register('escape', () => {
             // 关闭模态框或退出全屏
             if (this.appStateManager.getState('fullscreenMode')) {
@@ -230,24 +232,24 @@ class KeyboardShortcutManager {
                 uiManager.modalManager.closeAll();
             }
         }, { description: '关闭模态框/退出全屏', category: 'navigation' });
-        
+
         this.register('f11', () => {
             this.appStateManager.toggleState('fullscreenMode');
         }, { description: '切换全屏模式', category: 'view' });
-        
+
         // 视图切换快捷键
         this.register('ctrl+1', () => {
             galleryManager.viewManager.setViewMode('grid');
         }, { description: '网格视图', category: 'view' });
-        
+
         this.register('ctrl+2', () => {
             galleryManager.viewManager.setViewMode('list');
         }, { description: '列表视图', category: 'view' });
-        
+
         this.register('ctrl+3', () => {
             galleryManager.viewManager.setViewMode('masonry');
         }, { description: '瀑布流视图', category: 'view' });
-        
+
         // 管理员快捷键
         this.register('ctrl+shift+a', () => {
             if (adminManager.isAdminMode) {
@@ -257,12 +259,12 @@ class KeyboardShortcutManager {
                 }
             }
         }, { description: '切换管理员面板', category: 'admin' });
-        
+
         // 主题切换
         this.register('ctrl+shift+t', () => {
             uiManager.themeManager.toggleTheme();
         }, { description: '切换主题', category: 'ui' });
-        
+
         // 刷新
         this.register('f5', () => {
             galleryManager.refreshGallery(true);
@@ -292,29 +294,29 @@ class KeyboardShortcutManager {
         if (!this.isEnabled || !this.appStateManager.getState('keyboardShortcutsEnabled')) {
             return;
         }
-        
+
         // 构建快捷键组合
         const parts = [];
-        
+
         if (event.ctrlKey) parts.push('ctrl');
         if (event.shiftKey) parts.push('shift');
         if (event.altKey) parts.push('alt');
         if (event.metaKey) parts.push('meta');
-        
+
         // 添加主键
         const key = event.key.toLowerCase();
         if (!['control', 'shift', 'alt', 'meta'].includes(key)) {
             parts.push(key);
         }
-        
+
         const combination = parts.sort().join('+');
         const shortcut = this.shortcuts.get(combination);
-        
+
         if (shortcut) {
             if (shortcut.preventDefault) {
                 event.preventDefault();
             }
-            
+
             try {
                 shortcut.handler(event);
             } catch (error) {
@@ -342,7 +344,7 @@ class DragDropManager {
         this.appStateManager = appStateManager;
         this.dropZone = null;
         this.dragCounter = 0;
-        
+
         this._bindEvents();
     }
 
@@ -354,7 +356,7 @@ class DragDropManager {
         if (this.dropZone) {
             this._unbindDropZoneEvents();
         }
-        
+
         this.dropZone = element;
         this._bindDropZoneEvents();
     }
@@ -365,27 +367,27 @@ class DragDropManager {
      * @private
      */
     async _handleFiles(files) {
-        const imageFiles = Array.from(files).filter(file => 
+        const imageFiles = Array.from(files).filter(file =>
             file.type.startsWith('image/')
         );
-        
+
         if (imageFiles.length === 0) {
             uiManager.tooltipManager.warning('请拖拽图片文件');
             return;
         }
-        
+
         // 显示上传进度
         uiManager.progressManager.show('正在上传图片...');
-        
+
         try {
             for (let i = 0; i < imageFiles.length; i++) {
                 const file = imageFiles[i];
                 const progress = ((i + 1) / imageFiles.length) * 100;
-                
+
                 uiManager.progressManager.update(progress, `上传中: ${file.name}`);
-                
+
                 await imageManager.loadImageFromFile(file);
-                
+
                 // 触发上传进度事件
                 eventManager.emitUploadProgress({
                     current: i + 1,
@@ -394,15 +396,15 @@ class DragDropManager {
                     progress
                 });
             }
-            
+
             uiManager.tooltipManager.success(`成功上传 ${imageFiles.length} 张图片`);
-            
+
             // 触发上传完成事件
             eventManager.emitUploadComplete({
                 count: imageFiles.length,
                 timestamp: Date.now()
             });
-            
+
         } catch (error) {
             console.error('文件上传失败:', error);
             uiManager.tooltipManager.error('文件上传失败');
@@ -423,7 +425,7 @@ class DragDropManager {
                 e.stopPropagation();
             });
         });
-        
+
         // 全局拖拽进入
         document.addEventListener('dragenter', () => {
             this.dragCounter++;
@@ -431,7 +433,7 @@ class DragDropManager {
                 this.appStateManager.setState('dragDropActive', true);
             }
         });
-        
+
         // 全局拖拽离开
         document.addEventListener('dragleave', () => {
             this.dragCounter--;
@@ -439,7 +441,7 @@ class DragDropManager {
                 this.appStateManager.setState('dragDropActive', false);
             }
         });
-        
+
         // 全局放置
         document.addEventListener('drop', () => {
             this.dragCounter = 0;
@@ -453,11 +455,11 @@ class DragDropManager {
      */
     _bindDropZoneEvents() {
         if (!this.dropZone) return;
-        
+
         this.dropZone.addEventListener('dragover', (e) => {
             e.dataTransfer.dropEffect = 'copy';
         });
-        
+
         this.dropZone.addEventListener('drop', (e) => {
             const files = e.dataTransfer.files;
             if (files.length > 0) {
@@ -489,9 +491,9 @@ class PerformanceMonitor {
             searchTimes: [],
             filterTimes: []
         };
-        
+
         this.observers = new Map();
-        
+
         this._initializeObservers();
     }
 
@@ -504,7 +506,7 @@ class PerformanceMonitor {
     recordMetric(metric, value, metadata = {}) {
         if (Array.isArray(this.metrics[metric])) {
             this.metrics[metric].push({ value, timestamp: Date.now(), ...metadata });
-            
+
             // 限制数组大小
             if (this.metrics[metric].length > 100) {
                 this.metrics[metric].shift();
@@ -512,7 +514,7 @@ class PerformanceMonitor {
         } else {
             this.metrics[metric] = value;
         }
-        
+
         // 触发性能事件
         eventManager.emit('performance:metric-recorded', {
             metric,
@@ -538,12 +540,12 @@ class PerformanceMonitor {
     endMeasure(name) {
         performance.mark(`${name}-end`);
         performance.measure(name, `${name}-start`, `${name}-end`);
-        
+
         const measure = performance.getEntriesByName(name)[0];
         const duration = measure ? measure.duration : 0;
-        
+
         this.recordMetric(`${name}Times`, duration);
-        
+
         return duration;
     }
 
@@ -558,7 +560,7 @@ class PerformanceMonitor {
             memoryInfo: this._getMemoryInfo(),
             navigationTiming: this._getNavigationTiming()
         };
-        
+
         // 计算平均值
         ['imageLoadTimes', 'searchTimes', 'filterTimes'].forEach(metric => {
             if (Array.isArray(report[metric]) && report[metric].length > 0) {
@@ -566,7 +568,7 @@ class PerformanceMonitor {
                 report[`${metric}Average`] = values.reduce((a, b) => a + b, 0) / values.length;
             }
         });
-        
+
         return report;
     }
 
@@ -615,7 +617,7 @@ class PerformanceMonitor {
                     });
                 });
             });
-            
+
             try {
                 longTaskObserver.observe({ entryTypes: ['longtask'] });
                 this.observers.set('longtask', longTaskObserver);
@@ -645,10 +647,16 @@ class App {
         this.keyboardShortcutManager = new KeyboardShortcutManager(this.stateManager);
         this.dragDropManager = new DragDropManager(this.stateManager);
         this.performanceMonitor = new PerformanceMonitor();
-        
+        this.lazyLoader = new LazyLoader({
+            selector: '.lazy-image',
+            rootMargin: '200px',
+            threshold: 0.01
+        });
+        this.galleryRenderer = galleryRenderer;
+
         this.isInitialized = false;
         this.initializationPromise = null;
-        
+
         this._bindGlobalEvents();
     }
 
@@ -660,11 +668,11 @@ class App {
         if (this.isInitialized) {
             return this.initializationPromise;
         }
-        
+
         if (this.initializationPromise) {
             return this.initializationPromise;
         }
-        
+
         this.initializationPromise = this._performInitialization();
         return this.initializationPromise;
     }
@@ -677,36 +685,36 @@ class App {
     async _performInitialization() {
         try {
             this.performanceMonitor.startMeasure('app-initialization');
-            
-            console.log('🚀 AI智能相册系统启动中...');
-            
+
+            appLogger.info('🚀 AI智能相册系统启动中...');
+
             // 设置加载状态
             this.stateManager.setState('isLoading', true);
-            
+
             // 1. 初始化存储管理器
-            console.log('📦 初始化存储管理器...');
+            appLogger.info('📦 初始化存储管理器...');
             await storageManager.initialize();
-            console.log('✅ 存储管理器初始化完成');
-            
+            appLogger.info('✅ 存储管理器初始化完成');
+
             // 2. 初始化UI管理器
-            console.log('🎨 初始化UI管理器...');
+            appLogger.info('🎨 初始化UI管理器...');
             await uiManager.initialize(CONFIG.UI);
-            console.log('✅ UI管理器初始化完成');
-            
+            appLogger.info('✅ UI管理器初始化完成');
+
             // 3. 初始化图片管理器
-            console.log('🖼️ 初始化图片管理器...');
+            appLogger.info('🖼️ 初始化图片管理器...');
             await imageManager.initialize();
-            console.log('✅ 图片管理器初始化完成');
-            
+            appLogger.info('✅ 图片管理器初始化完成');
+
             // 4. 初始化AI引擎（非阻塞）
-            console.log('🤖 初始化AI引擎...');
+            appLogger.info('🤖 初始化AI引擎...');
             let aiInitialized = false;
             try {
                 aiInitialized = await Promise.race([
                     aiEngine.initialize(),
                     new Promise(resolve => setTimeout(() => resolve(false), 10000)) // 10秒超时
                 ]);
-                console.log('✅ AI引擎初始化完成，成功: ' + aiInitialized);
+                appLogger.info(`✅ AI引擎初始化完成，成功: ${aiInitialized}`);
                 if (!aiInitialized) {
                     console.warn('⚠️ AI功能初始化失败，应用将以基础模式运行');
                     // 不显示错误提示，因为uiManager可能还没完全初始化
@@ -715,56 +723,56 @@ class App {
                 console.warn('⚠️ AI引擎初始化异常:', error.message);
                 aiInitialized = false;
             }
-            
+
             // 5. 初始化图片库管理器
-            console.log('📚 初始化图片库管理器...');
+            appLogger.info('📚 初始化图片库管理器...');
             await galleryManager.refreshGallery(true);
-            console.log('✅ 图片库管理器初始化完成');
-            
+            appLogger.info('✅ 图片库管理器初始化完成');
+
             // 6. 设置拖拽区域
             const dropZone = document.body;
             this.dragDropManager.setDropZone(dropZone);
-            console.log('✅ 拖拽区域设置完成');
-            
+            appLogger.info('✅ 拖拽区域设置完成');
+
             // 7. 绑定UI事件
             this._bindUIEvents();
-            console.log('✅ UI事件绑定完成');
-            
+            appLogger.info('✅ UI事件绑定完成');
+
             // 8. 恢复应用状态
             await this._restoreAppState();
-            console.log('✅ 应用状态恢复完成');
-            
+            appLogger.info('✅ 应用状态恢复完成');
+
             // 9. 初始化完成
             this.isInitialized = true;
             this.stateManager.setState({
                 isInitialized: true,
                 isLoading: false
             });
-            console.log('✅ 初始化状态设置完成');
-            
+            appLogger.info('✅ 初始化状态设置完成');
+
             const initTime = this.performanceMonitor.endMeasure('app-initialization');
-            
-            console.log(`✅ AI智能相册系统初始化完成 (${initTime.toFixed(2)}ms)`);
-            
+
+            appLogger.info(`✅ AI智能相册系统初始化完成 (${initTime.toFixed(2)}ms)`);
+
             // 触发初始化完成事件
             eventManager.emit('app:initialized', {
                 initTime,
                 timestamp: Date.now()
             });
-            
+
             // 显示欢迎消息
             uiManager.tooltipManager.success('AI智能相册系统已就绪', { duration: 3000 });
-            
+
         } catch (error) {
             console.error('应用程序初始化失败:', error);
-            
+
             this.stateManager.setState({
                 isLoading: false,
                 initializationError: error.message
             });
-            
+
             uiManager.tooltipManager.error('系统初始化失败，请刷新页面重试');
-            
+
             throw error;
         }
     }
@@ -799,21 +807,21 @@ class App {
      * 销毁应用程序
      */
     destroy() {
-        console.log('🔄 正在销毁应用程序...');
-        
+        appLogger.info('🔄 正在销毁应用程序...');
+
         // 清理性能监控
         this.performanceMonitor.cleanup();
-        
+
         // 清理事件监听器
         this._unbindGlobalEvents();
-        
+
         // 重置状态
         this.stateManager.resetState();
-        
+
         this.isInitialized = false;
         this.initializationPromise = null;
-        
-        console.log('✅ 应用程序已销毁');
+
+        appLogger.info('✅ 应用程序已销毁');
     }
 
     /**
@@ -834,7 +842,7 @@ class App {
                 }, 300);
             });
         }
-        
+
         // 文件上传按钮
         const uploadButton = document.querySelector('#upload-button');
         if (uploadButton) {
@@ -851,7 +859,7 @@ class App {
                 fileInput.click();
             });
         }
-        
+
         // 管理员登录按钮
         const adminButton = document.querySelector('#admin-button');
         if (adminButton) {
@@ -862,7 +870,7 @@ class App {
                 }
             });
         }
-        
+
         // 主题切换按钮
         const themeButton = document.querySelector('#theme-toggle');
         if (themeButton) {
@@ -885,7 +893,7 @@ class App {
                     currentView: savedState.currentView || 'gallery',
                     keyboardShortcutsEnabled: savedState.keyboardShortcutsEnabled !== false
                 };
-                
+
                 this.stateManager.setState(safeState);
             }
         } catch (error) {
@@ -904,7 +912,7 @@ class App {
                 keyboardShortcutsEnabled: this.stateManager.getState('keyboardShortcutsEnabled'),
                 timestamp: Date.now()
             };
-            
+
             storageManager.specializedStorage.userPreferences.set('appState', stateToSave);
         } catch (error) {
             console.warn('保存应用状态失败:', error);
@@ -920,7 +928,7 @@ class App {
         eventManager.on('app:state-changed', (data) => {
             this._saveAppState();
             if (data.key.includes('isLoading')) {
-                console.log('isLoading state changed:', data.newState.isLoading);
+                appLogger.info('isLoading state changed:', data.newState.isLoading);
                 if (data.newState.isLoading) {
                     uiManager.loadingManager.show('app-loading', { global: true, message: '正在初始化...' });
                 } else {
@@ -928,16 +936,16 @@ class App {
                 }
             }
         });
-        
+
         // 监听页面卸载
         window.addEventListener('beforeunload', () => {
             this._saveAppState();
         });
-        
+
         // 监听错误
         window.addEventListener('error', (event) => {
             console.error('全局错误:', event.error);
-            
+
             eventManager.emit('app:error', {
                 message: event.message,
                 filename: event.filename,
@@ -947,11 +955,11 @@ class App {
                 timestamp: Date.now()
             });
         });
-        
+
         // 监听未处理的Promise拒绝
         window.addEventListener('unhandledrejection', (event) => {
             console.error('未处理的Promise拒绝:', event.reason);
-            
+
             eventManager.emit('app:unhandled-rejection', {
                 reason: event.reason,
                 timestamp: Date.now()

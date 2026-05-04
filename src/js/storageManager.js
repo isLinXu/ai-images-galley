@@ -6,19 +6,22 @@
 import { CONFIG, STORAGE_KEYS } from './config.js';
 import { ObjectUtils, TimeUtils } from './utils.js';
 import eventManager from './eventManager.js';
+import { storageLogger } from './logger.js';
 
 /**
  * 存储适配器接口
  */
 class StorageAdapter {
+    // eslint-disable-next-line no-unused-vars
     get(key) {
         throw new Error('get方法必须被实现');
     }
 
-    set(key, value) {
+    set(_key, _value) {
         throw new Error('set方法必须被实现');
     }
 
+    // eslint-disable-next-line no-unused-vars
     remove(key) {
         throw new Error('remove方法必须被实现');
     }
@@ -102,7 +105,7 @@ class LocalStorageAdapter extends StorageAdapter {
             this.storage.setItem(testKey, 'test');
             this.storage.removeItem(testKey);
             return true;
-        } catch (error) {
+        } catch {
             return false;
         }
     }
@@ -161,13 +164,13 @@ class StorageManager {
             session: new SessionStorageAdapter(),
             memory: new MemoryStorageAdapter()
         };
-        
+
         this.defaultAdapter = 'local';
         this.cache = new Map();
         this.cacheTimeout = CONFIG.STORAGE.CACHE_EXPIRY;
         this.maxCacheSize = 100;
         this.isInitialized = false;
-        
+
         // 初始化清理定时器
         this._startCleanupTimer();
     }
@@ -178,22 +181,22 @@ class StorageManager {
      */
     async initialize() {
         if (this.isInitialized) {
-            console.log('StorageManager already initialized');
+            storageLogger.info('StorageManager already initialized');
             return;
         }
 
         try {
-            console.log('Initializing StorageManager...');
-            
+            storageLogger.info('Initializing StorageManager...');
+
             // 检查存储适配器可用性
             for (const [name, adapter] of Object.entries(this.adapters)) {
                 if (!adapter.available) {
                     console.warn(`Storage adapter '${name}' is not available`);
                 }
             }
-            
+
             this.isInitialized = true;
-            console.log('StorageManager initialized successfully');
+            storageLogger.info('StorageManager initialized successfully');
         } catch (error) {
             console.error('Failed to initialize StorageManager:', error);
             throw error;
@@ -240,12 +243,12 @@ class StorageManager {
      */
     set(key, value, adapter = this.defaultAdapter) {
         const success = this.adapters[adapter].set(key, value);
-        
+
         if (success) {
             // 更新缓存
             const cacheKey = `${adapter}:${key}`;
             this._setCache(cacheKey, value);
-            
+
             // 触发存储变更事件
             eventManager.emit('storage:changed', {
                 key,
@@ -254,7 +257,7 @@ class StorageManager {
                 action: 'set'
             });
         }
-        
+
         return success;
     }
 
@@ -266,12 +269,12 @@ class StorageManager {
      */
     remove(key, adapter = this.defaultAdapter) {
         const success = this.adapters[adapter].remove(key);
-        
+
         if (success) {
             // 清除缓存
             const cacheKey = `${adapter}:${key}`;
             this.cache.delete(cacheKey);
-            
+
             // 触发存储变更事件
             eventManager.emit('storage:changed', {
                 key,
@@ -279,7 +282,7 @@ class StorageManager {
                 action: 'remove'
             });
         }
-        
+
         return success;
     }
 
@@ -290,7 +293,7 @@ class StorageManager {
      */
     clear(adapter = this.defaultAdapter) {
         const success = this.adapters[adapter].clear();
-        
+
         if (success) {
             // 清除相关缓存
             for (const cacheKey of this.cache.keys()) {
@@ -298,14 +301,14 @@ class StorageManager {
                     this.cache.delete(cacheKey);
                 }
             }
-            
+
             // 触发存储变更事件
             eventManager.emit('storage:changed', {
                 adapter,
                 action: 'clear'
             });
         }
-        
+
         return success;
     }
 
@@ -341,7 +344,7 @@ class StorageManager {
             }
             return size;
         }
-        
+
         // 对于localStorage和sessionStorage
         let size = 0;
         const keys = this.keys(adapter);
@@ -431,11 +434,11 @@ class StorageManager {
     export(adapter = this.defaultAdapter) {
         const data = {};
         const keys = this.keys(adapter);
-        
+
         for (const key of keys) {
             data[key] = this.get(key, null, adapter);
         }
-        
+
         return {
             adapter,
             timestamp: new Date().toISOString(),
@@ -452,15 +455,15 @@ class StorageManager {
     import(exportData, merge = true) {
         try {
             const { adapter, data } = exportData;
-            
+
             if (!merge) {
                 this.clear(adapter);
             }
-            
+
             for (const [key, value] of Object.entries(data)) {
                 this.set(key, value, adapter);
             }
-            
+
             return true;
         } catch (error) {
             console.error('数据导入失败:', error);
@@ -475,17 +478,17 @@ class StorageManager {
      */
     namespace(namespace) {
         const prefixKey = (key) => `${namespace}:${key}`;
-        
+
         return {
-            get: (key, defaultValue, adapter) => 
+            get: (key, defaultValue, adapter) =>
                 this.get(prefixKey(key), defaultValue, adapter),
-            set: (key, value, adapter) => 
+            set: (key, value, adapter) =>
                 this.set(prefixKey(key), value, adapter),
-            remove: (key, adapter) => 
+            remove: (key, adapter) =>
                 this.remove(prefixKey(key), adapter),
-            has: (key, adapter) => 
+            has: (key, adapter) =>
                 this.has(prefixKey(key), adapter),
-            keys: (adapter) => 
+            keys: (adapter) =>
                 this.keys(adapter)
                     .filter(key => key.startsWith(`${namespace}:`))
                     .map(key => key.substring(namespace.length + 1)),
@@ -517,7 +520,7 @@ class SpecializedStorageManager {
             getUser: () => this.storage.get(STORAGE_KEYS.ADMIN_USER),
             setUser: (userData) => this.storage.set(STORAGE_KEYS.ADMIN_USER, userData),
             removeUser: () => this.storage.remove(STORAGE_KEYS.ADMIN_USER),
-            
+
             getLogs: () => this.storage.get(STORAGE_KEYS.ADMIN_LOGS, []),
             setLogs: (logs) => this.storage.set(STORAGE_KEYS.ADMIN_LOGS, logs),
             addLog: (log) => {
@@ -561,7 +564,7 @@ class SpecializedStorageManager {
                 }
                 this.setNotes(notes);
             },
-            
+
             getTags: () => this.storage.get(STORAGE_KEYS.CUSTOM_TAGS, new Map()),
             setTags: (tags) => this.storage.set(STORAGE_KEYS.CUSTOM_TAGS, tags),
             getImageTags: (imageUrl) => {

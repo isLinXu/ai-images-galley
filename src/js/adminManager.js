@@ -3,11 +3,12 @@
  * 负责管理员登录、权限验证、活动日志、安全设置等功能
  */
 
-import { CONFIG, ERROR_MESSAGES, SUCCESS_MESSAGES } from './config.js';
-import { ValidationUtils, TimeUtils, StringUtils, AsyncUtils } from './utils.js';
+import { CONFIG, ERROR_MESSAGES } from './config.js';
+import { ValidationUtils, TimeUtils, StringUtils } from './utils.js';
 import eventManager from './eventManager.js';
 import storageManager from './storageManager.js';
 import uiManager from './uiManager.js';
+import { adminLogger } from './logger.js';
 
 /**
  * 安全管理器
@@ -20,7 +21,7 @@ class SecurityManager {
         this.maxFailedAttempts = CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS;
         this.cooldownPeriod = CONFIG.SECURITY.LOGIN_COOLDOWN;
         this.sessionTimeout = CONFIG.SECURITY.SESSION_TIMEOUT;
-        
+
         this._loadSecurityData();
         this._startCleanupTimer();
     }
@@ -61,8 +62,8 @@ class SecurityManager {
             } else {
                 return {
                     valid: false,
-                    error: response.status === 401 ? 
-                        ERROR_MESSAGES.INVALID_TOKEN : 
+                    error: response.status === 401 ?
+                        ERROR_MESSAGES.INVALID_TOKEN :
                         ERROR_MESSAGES.TOKEN_VERIFICATION_FAILED
                 };
             }
@@ -82,13 +83,13 @@ class SecurityManager {
      */
     checkLoginCooldown(identifier) {
         const attempts = this.failedAttempts.get(identifier);
-        
+
         if (!attempts) {
             return { allowed: true, remainingTime: 0 };
         }
 
         const { count, lastAttempt } = attempts;
-        
+
         if (count < this.maxFailedAttempts) {
             return { allowed: true, remainingTime: 0 };
         }
@@ -116,7 +117,7 @@ class SecurityManager {
      */
     recordFailedLogin(identifier, details = {}) {
         const current = this.failedAttempts.get(identifier) || { count: 0, attempts: [] };
-        
+
         current.count++;
         current.lastAttempt = Date.now();
         current.attempts.push({
@@ -131,10 +132,10 @@ class SecurityManager {
         }
 
         this.failedAttempts.set(identifier, current);
-        
+
         // 保存到持久化存储
         this._saveSecurityData();
-        
+
         // 触发安全事件
         eventManager.emit('security:failed-login', {
             identifier,
@@ -160,7 +161,7 @@ class SecurityManager {
         this.failedAttempts.delete(identifier);
         this.blockedIPs.delete(identifier);
         this._saveSecurityData();
-        
+
         eventManager.emit('security:attempts-cleared', {
             identifier,
             timestamp: Date.now()
@@ -182,7 +183,7 @@ class SecurityManager {
             expiresAt: Date.now() + this.sessionTimeout,
             userAgent: navigator.userAgent
         };
-        
+
         this.sessionTokens.set(token, session);
         return token;
     }
@@ -194,20 +195,20 @@ class SecurityManager {
      */
     validateSessionToken(token) {
         const session = this.sessionTokens.get(token);
-        
+
         if (!session) {
             return null;
         }
-        
+
         // 检查是否过期
         if (Date.now() > session.expiresAt) {
             this.sessionTokens.delete(token);
             return null;
         }
-        
+
         // 更新最后活动时间
         session.lastActivity = Date.now();
-        
+
         return session;
     }
 
@@ -217,7 +218,7 @@ class SecurityManager {
      */
     revokeSessionToken(token) {
         this.sessionTokens.delete(token);
-        
+
         eventManager.emit('security:session-revoked', {
             token,
             timestamp: Date.now()
@@ -231,17 +232,17 @@ class SecurityManager {
     _cleanupExpiredSessions() {
         const now = Date.now();
         const expiredTokens = [];
-        
+
         for (const [token, session] of this.sessionTokens.entries()) {
             if (now > session.expiresAt) {
                 expiredTokens.push(token);
             }
         }
-        
+
         expiredTokens.forEach(token => {
             this.sessionTokens.delete(token);
         });
-        
+
         if (expiredTokens.length > 0) {
             eventManager.emit('security:sessions-expired', {
                 count: expiredTokens.length,
@@ -317,7 +318,7 @@ class ActivityLogManager {
         this.logs = [];
         this.maxLogs = CONFIG.ADMIN.MAX_ACTIVITY_LOGS;
         this.logTypes = CONFIG.ADMIN.LOG_TYPES;
-        
+
         this._loadLogs();
     }
 
@@ -340,21 +341,21 @@ class ActivityLogManager {
                 referrer: document.referrer
             }
         };
-        
+
         this.logs.unshift(logEntry);
-        
+
         // 限制日志数量
         if (this.logs.length > this.maxLogs) {
             this.logs = this.logs.slice(0, this.maxLogs);
         }
-        
+
         // 保存到持久化存储
         this._saveLogs();
-        
+
         // 触发日志事件
         eventManager.emit('admin:activity-logged', logEntry);
-        
-        console.log(`管理员活动记录: ${action}`, details);
+
+        adminLogger.info(`管理员活动记录: ${action}`, details);
     }
 
     /**
@@ -364,33 +365,33 @@ class ActivityLogManager {
      */
     getLogs(filters = {}) {
         let filteredLogs = [...this.logs];
-        
+
         // 按动作类型过滤
         if (filters.action) {
             filteredLogs = filteredLogs.filter(log => log.action === filters.action);
         }
-        
+
         // 按用户过滤
         if (filters.user) {
             filteredLogs = filteredLogs.filter(log => log.user === filters.user);
         }
-        
+
         // 按时间范围过滤
         if (filters.startTime) {
             filteredLogs = filteredLogs.filter(log => log.timestamp >= filters.startTime);
         }
-        
+
         if (filters.endTime) {
             filteredLogs = filteredLogs.filter(log => log.timestamp <= filters.endTime);
         }
-        
+
         // 分页
         if (filters.page && filters.pageSize) {
             const start = (filters.page - 1) * filters.pageSize;
             const end = start + filters.pageSize;
             filteredLogs = filteredLogs.slice(start, end);
         }
-        
+
         return filteredLogs;
     }
 
@@ -400,7 +401,7 @@ class ActivityLogManager {
      */
     clearLogs(options = {}) {
         const { olderThan, action, user } = options;
-        
+
         if (olderThan) {
             // 清除指定时间之前的日志
             this.logs = this.logs.filter(log => log.timestamp > olderThan);
@@ -414,9 +415,9 @@ class ActivityLogManager {
             // 清除所有日志
             this.logs = [];
         }
-        
+
         this._saveLogs();
-        
+
         eventManager.emit('admin:logs-cleared', {
             options,
             timestamp: Date.now()
@@ -431,7 +432,7 @@ class ActivityLogManager {
      */
     exportLogs(format = 'json', filters = {}) {
         const logs = this.getLogs(filters);
-        
+
         if (format === 'csv') {
             return this._exportToCSV(logs);
         } else {
@@ -447,7 +448,7 @@ class ActivityLogManager {
      */
     _exportToCSV(logs) {
         if (logs.length === 0) return '';
-        
+
         const headers = ['时间', '动作', '用户', 'IP地址', '用户代理', '详情'];
         const rows = logs.map(log => [
             TimeUtils.formatDateTime(log.timestamp),
@@ -457,11 +458,11 @@ class ActivityLogManager {
             log.userAgent || 'unknown',
             JSON.stringify(log.details)
         ]);
-        
+
         const csvContent = [headers, ...rows]
             .map(row => row.map(cell => `"${cell}"`).join(','))
             .join('\n');
-        
+
         return csvContent;
     }
 
@@ -514,16 +515,16 @@ class ActivityLogManager {
             userCounts: {},
             recentActivity: []
         };
-        
+
         // 统计各种动作的数量
         this.logs.forEach(log => {
             stats.actionCounts[log.action] = (stats.actionCounts[log.action] || 0) + 1;
             stats.userCounts[log.user] = (stats.userCounts[log.user] || 0) + 1;
         });
-        
+
         // 获取最近的活动
         stats.recentActivity = this.logs.slice(0, 10);
-        
+
         return stats;
     }
 }
@@ -535,7 +536,7 @@ class PermissionManager {
     constructor() {
         this.permissions = CONFIG.ADMIN.PERMISSIONS;
         this.userPermissions = new Map();
-        
+
         this._loadPermissions();
     }
 
@@ -559,13 +560,13 @@ class PermissionManager {
         if (!this.permissions.includes(permission)) {
             throw new Error(`未知权限: ${permission}`);
         }
-        
+
         const userPerms = this.userPermissions.get(user) || [];
         if (!userPerms.includes(permission)) {
             userPerms.push(permission);
             this.userPermissions.set(user, userPerms);
             this._savePermissions();
-            
+
             eventManager.emit('admin:permission-granted', {
                 user,
                 permission,
@@ -582,12 +583,12 @@ class PermissionManager {
     revokePermission(user, permission) {
         const userPerms = this.userPermissions.get(user) || [];
         const index = userPerms.indexOf(permission);
-        
+
         if (index > -1) {
             userPerms.splice(index, 1);
             this.userPermissions.set(user, userPerms);
             this._savePermissions();
-            
+
             eventManager.emit('admin:permission-revoked', {
                 user,
                 permission,
@@ -644,7 +645,7 @@ class SessionManager {
         this.warningTime = CONFIG.SECURITY.SESSION_WARNING_TIME;
         this.sessionTimer = null;
         this.warningTimer = null;
-        
+
         this._bindEvents();
     }
 
@@ -658,10 +659,10 @@ class SessionManager {
             startTime: Date.now(),
             lastActivity: Date.now()
         };
-        
+
         this._startSessionTimers();
         this._bindActivityListeners();
-        
+
         eventManager.emit('admin:session-started', {
             user: sessionData.user,
             timestamp: Date.now()
@@ -674,19 +675,19 @@ class SessionManager {
      */
     endSession(reason = 'logout') {
         if (!this.currentSession) return;
-        
+
         const sessionDuration = Date.now() - this.currentSession.startTime;
-        
+
         this._clearTimers();
         this._unbindActivityListeners();
-        
+
         eventManager.emit('admin:session-ended', {
             user: this.currentSession.user,
             reason,
             duration: sessionDuration,
             timestamp: Date.now()
         });
-        
+
         this.currentSession = null;
     }
 
@@ -695,7 +696,7 @@ class SessionManager {
      */
     updateActivity() {
         if (!this.currentSession) return;
-        
+
         this.currentSession.lastActivity = Date.now();
         this._resetSessionTimers();
     }
@@ -706,7 +707,7 @@ class SessionManager {
      */
     isSessionValid() {
         if (!this.currentSession) return false;
-        
+
         const timeSinceActivity = Date.now() - this.currentSession.lastActivity;
         return timeSinceActivity < this.sessionTimeout;
     }
@@ -717,10 +718,10 @@ class SessionManager {
      */
     getSessionInfo() {
         if (!this.currentSession) return null;
-        
+
         const timeSinceActivity = Date.now() - this.currentSession.lastActivity;
         const remainingTime = this.sessionTimeout - timeSinceActivity;
-        
+
         return {
             ...this.currentSession,
             timeSinceActivity,
@@ -735,12 +736,12 @@ class SessionManager {
      */
     _startSessionTimers() {
         this._clearTimers();
-        
+
         // 设置警告定时器
         this.warningTimer = setTimeout(() => {
             this._showSessionWarning();
         }, this.sessionTimeout - this.warningTime);
-        
+
         // 设置超时定时器
         this.sessionTimer = setTimeout(() => {
             this._handleSessionTimeout();
@@ -764,7 +765,7 @@ class SessionManager {
             clearTimeout(this.sessionTimer);
             this.sessionTimer = null;
         }
-        
+
         if (this.warningTimer) {
             clearTimeout(this.warningTimer);
             this.warningTimer = null;
@@ -777,12 +778,12 @@ class SessionManager {
      */
     _showSessionWarning() {
         const remainingTime = TimeUtils.formatDuration(this.warningTime);
-        
+
         uiManager.tooltipManager.warning(
             `会话即将在 ${remainingTime} 后过期，请保持活动状态`,
             { duration: 10000 }
         );
-        
+
         eventManager.emit('admin:session-warning', {
             remainingTime: this.warningTime,
             timestamp: Date.now()
@@ -795,15 +796,15 @@ class SessionManager {
      */
     _handleSessionTimeout() {
         uiManager.tooltipManager.error('会话已超时，请重新登录');
-        
+
         // 记录会话超时活动
         eventManager.emit('admin:session-timeout', {
             user: this.currentSession?.user,
             timestamp: Date.now()
         });
-        
+
         this.endSession('timeout');
-        
+
         // 强制退出管理模式
         eventManager.emit('admin:force-logout');
     }
@@ -814,11 +815,11 @@ class SessionManager {
      */
     _bindActivityListeners() {
         const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-        
+
         this.activityHandler = () => {
             this.updateActivity();
         };
-        
+
         events.forEach(event => {
             document.addEventListener(event, this.activityHandler, true);
         });
@@ -830,13 +831,13 @@ class SessionManager {
      */
     _unbindActivityListeners() {
         if (!this.activityHandler) return;
-        
+
         const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-        
+
         events.forEach(event => {
             document.removeEventListener(event, this.activityHandler, true);
         });
-        
+
         this.activityHandler = null;
     }
 
@@ -869,10 +870,10 @@ class AdminManager {
         this.activityLogManager = new ActivityLogManager();
         this.permissionManager = new PermissionManager();
         this.sessionManager = new SessionManager();
-        
+
         this.isAdminMode = false;
         this.currentAdmin = null;
-        
+
         this._bindEvents();
         this._loadAdminState();
     }
@@ -886,7 +887,7 @@ class AdminManager {
         try {
             // 获取客户端标识符
             const identifier = this._getClientIdentifier();
-            
+
             // 检查登录冷却
             const cooldownCheck = this.securityManager.checkLoginCooldown(identifier);
             if (!cooldownCheck.allowed) {
@@ -895,29 +896,29 @@ class AdminManager {
                     error: `登录尝试过于频繁，请在 ${cooldownCheck.formattedTime} 后重试`
                 };
             }
-            
+
             // 验证Token
             const validation = await this.securityManager.validateGitHubToken(token);
-            
+
             if (!validation.valid) {
                 // 记录失败尝试
                 this.securityManager.recordFailedLogin(identifier, {
                     reason: validation.error,
-                    token: token.substring(0, 8) + '...'
+                    token: `${token.substring(0, 8)}...`
                 });
-                
+
                 return {
                     success: false,
                     error: validation.error
                 };
             }
-            
+
             // 清除失败尝试记录
             this.securityManager.clearLoginAttempts(identifier);
-            
+
             // 生成会话令牌
             const sessionToken = this.securityManager.generateSessionToken(validation.user);
-            
+
             // 设置管理员状态
             this.isAdminMode = true;
             this.currentAdmin = {
@@ -925,32 +926,32 @@ class AdminManager {
                 sessionToken,
                 loginTime: Date.now()
             };
-            
+
             // 保存到本地存储
             this._saveAdminState();
-            
+
             // 启动会话监控
             this.sessionManager.startSession(this.currentAdmin);
-            
+
             // 记录登录活动
             this.activityLogManager.logActivity('LOGIN', {
                 user: validation.user.login,
                 success: true,
                 sessionToken
             });
-            
+
             // 触发登录成功事件
             eventManager.emitAdminLogin({
                 user: validation.user,
                 timestamp: Date.now()
             });
-            
+
             return {
                 success: true,
                 user: validation.user,
                 sessionToken
             };
-            
+
         } catch (error) {
             console.error('管理员登录失败:', error);
             return {
@@ -965,30 +966,30 @@ class AdminManager {
      */
     logout() {
         if (!this.isAdminMode) return;
-        
+
         const user = this.currentAdmin?.login || 'unknown';
-        
+
         // 撤销会话令牌
         if (this.currentAdmin?.sessionToken) {
             this.securityManager.revokeSessionToken(this.currentAdmin.sessionToken);
         }
-        
+
         // 结束会话监控
         this.sessionManager.endSession('logout');
-        
+
         // 记录登出活动
         this.activityLogManager.logActivity('LOGOUT', {
             user,
             sessionDuration: Date.now() - (this.currentAdmin?.loginTime || Date.now())
         });
-        
+
         // 清除管理员状态
         this.isAdminMode = false;
         this.currentAdmin = null;
-        
+
         // 清除本地存储
         this._clearAdminState();
-        
+
         // 触发登出事件
         eventManager.emitAdminLogout({
             user,
@@ -1005,7 +1006,7 @@ class AdminManager {
         if (!this.isAdminMode || !this.currentAdmin) {
             return false;
         }
-        
+
         return this.permissionManager.hasPermission(this.currentAdmin.login, permission);
     }
 
@@ -1017,20 +1018,20 @@ class AdminManager {
         if (!this.isAdminMode || !this.currentAdmin) {
             return false;
         }
-        
+
         // 验证会话令牌
         const session = this.securityManager.validateSessionToken(this.currentAdmin.sessionToken);
         if (!session) {
             this.logout();
             return false;
         }
-        
+
         // 验证会话管理器
         if (!this.sessionManager.isSessionValid()) {
             this.logout();
             return false;
         }
-        
+
         return true;
     }
 
@@ -1042,7 +1043,7 @@ class AdminManager {
         if (!this.isAdminMode || !this.currentAdmin) {
             return null;
         }
-        
+
         return {
             ...this.currentAdmin,
             sessionInfo: this.sessionManager.getSessionInfo(),
@@ -1078,10 +1079,10 @@ class AdminManager {
         const fingerprint = [
             navigator.userAgent,
             navigator.language,
-            screen.width + 'x' + screen.height,
+            `${screen.width}x${screen.height}`,
             new Date().getTimezoneOffset()
         ].join('|');
-        
+
         return StringUtils.hash(fingerprint);
     }
 
@@ -1116,8 +1117,8 @@ class AdminManager {
                     this.isAdminMode = true;
                     this.currentAdmin = state.currentAdmin;
                     this.sessionManager.startSession(this.currentAdmin);
-                    
-                    console.log('恢复管理员会话:', this.currentAdmin.login);
+
+                    adminLogger.info('恢复管理员会话:', this.currentAdmin.login);
                 } else {
                     this._clearAdminState();
                 }
@@ -1149,7 +1150,7 @@ class AdminManager {
         eventManager.on('admin:force-logout', () => {
             this.logout();
         });
-        
+
         // 监听会话超时事件
         eventManager.on('admin:session-timeout', (data) => {
             this.activityLogManager.logActivity('SESSION_TIMEOUT', {
@@ -1157,7 +1158,7 @@ class AdminManager {
                 reason: 'inactivity'
             });
         });
-        
+
         // 监听页面卸载事件
         window.addEventListener('beforeunload', () => {
             if (this.isAdminMode) {

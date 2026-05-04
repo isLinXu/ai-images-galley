@@ -21,15 +21,15 @@ export const TimeUtils = {
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMs / 3600000);
         const diffDays = Math.floor(diffMs / 86400000);
-        
+
         if (diffMins < 1) return '刚刚';
         if (diffMins < 60) return `${diffMins}分钟前`;
         if (diffHours < 24) return `${diffHours}小时前`;
         if (diffDays < 30) return `${diffDays}天前`;
-        
+
         return targetDate.toLocaleDateString('zh-CN');
     },
-    
+
     /**
      * 格式化时间戳
      * @param {number|Date} timestamp - 时间戳
@@ -46,7 +46,7 @@ export const TimeUtils = {
             second: '2-digit'
         });
     },
-    
+
     /**
      * 检查时间是否过期
      * @param {number|Date} timestamp - 时间戳
@@ -71,14 +71,14 @@ export const ValidationUtils = {
         if (!token || token.length < CONFIG.SECURITY.TOKEN_MIN_LENGTH) {
             return { valid: false, message: ERROR_MESSAGES.TOKEN_TOO_SHORT };
         }
-        
+
         if (!PATTERNS.GITHUB_TOKEN.test(token) && !PATTERNS.GITHUB_CLASSIC_TOKEN.test(token)) {
             return { valid: false, message: ERROR_MESSAGES.TOKEN_INVALID };
         }
-        
+
         return { valid: true };
     },
-    
+
     /**
      * 验证文件类型
      * @param {File} file - 文件对象
@@ -88,19 +88,19 @@ export const ValidationUtils = {
         if (!file) {
             return { valid: false, message: '请选择文件' };
         }
-        
+
         if (file.size > CONFIG.IMAGE.MAX_FILE_SIZE) {
             return { valid: false, message: ERROR_MESSAGES.FILE_TOO_LARGE };
         }
-        
+
         const extension = file.name.split('.').pop().toLowerCase();
         if (!CONFIG.IMAGE.SUPPORTED_FORMATS.includes(extension)) {
             return { valid: false, message: ERROR_MESSAGES.UNSUPPORTED_FORMAT };
         }
-        
+
         return { valid: true };
     },
-    
+
     /**
      * 验证邮箱格式
      * @param {string} email - 邮箱地址
@@ -109,7 +109,7 @@ export const ValidationUtils = {
     validateEmail(email) {
         return PATTERNS.EMAIL.test(email);
     },
-    
+
     /**
      * 验证URL格式
      * @param {string} url - URL地址
@@ -131,7 +131,7 @@ export const StringUtils = {
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     },
-    
+
     /**
      * 截断字符串
      * @param {string} str - 原字符串
@@ -143,7 +143,7 @@ export const StringUtils = {
         if (!str || str.length <= length) return str;
         return str.substring(0, length - suffix.length) + suffix;
     },
-    
+
     /**
      * 转换为驼峰命名
      * @param {string} str - 原字符串
@@ -152,7 +152,7 @@ export const StringUtils = {
     toCamelCase(str) {
         return str.replace(/[-_\s]+(.)?/g, (_, c) => c ? c.toUpperCase() : '');
     },
-    
+
     /**
      * 转换为短横线命名
      * @param {string} str - 原字符串
@@ -161,7 +161,7 @@ export const StringUtils = {
     toKebabCase(str) {
         return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
     },
-    
+
     /**
      * 清理HTML标签
      * @param {string} html - HTML字符串
@@ -172,7 +172,7 @@ export const StringUtils = {
         div.innerHTML = html;
         return div.textContent || div.innerText || '';
     },
-    
+
     /**
      * 转义HTML字符
      * @param {string} str - 原字符串
@@ -205,7 +205,7 @@ export const ArrayUtils = {
             return true;
         });
     },
-    
+
     /**
      * 数组分块
      * @param {Array} arr - 原数组
@@ -219,7 +219,7 @@ export const ArrayUtils = {
         }
         return chunks;
     },
-    
+
     /**
      * 数组随机排序
      * @param {Array} arr - 原数组
@@ -233,7 +233,7 @@ export const ArrayUtils = {
         }
         return result;
     },
-    
+
     /**
      * 数组排序（支持多字段）
      * @param {Array} arr - 原数组
@@ -246,7 +246,7 @@ export const ArrayUtils = {
                 const { key, order = 'asc' } = typeof field === 'string' ? { key: field } : field;
                 const aVal = a[key];
                 const bVal = b[key];
-                
+
                 if (aVal < bVal) return order === 'asc' ? -1 : 1;
                 if (aVal > bVal) return order === 'asc' ? 1 : -1;
             }
@@ -271,7 +271,7 @@ export const ObjectUtils = {
         if (typeof obj === 'object') {
             const cloned = {};
             for (const key in obj) {
-                if (obj.hasOwnProperty(key)) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
                     cloned[key] = this.deepClone(obj[key]);
                 }
             }
@@ -279,7 +279,7 @@ export const ObjectUtils = {
         }
         return obj;
     },
-    
+
     /**
      * 深度合并对象
      * @param {Object} target - 目标对象
@@ -289,7 +289,7 @@ export const ObjectUtils = {
     deepMerge(target, ...sources) {
         if (!sources.length) return target;
         const source = sources.shift();
-        
+
         if (this.isObject(target) && this.isObject(source)) {
             for (const key in source) {
                 if (this.isObject(source[key])) {
@@ -300,10 +300,10 @@ export const ObjectUtils = {
                 }
             }
         }
-        
+
         return this.deepMerge(target, ...sources);
     },
-    
+
     /**
      * 检查是否为对象
      * @param {*} item - 检查项
@@ -312,7 +312,7 @@ export const ObjectUtils = {
     isObject(item) {
         return item && typeof item === 'object' && !Array.isArray(item);
     },
-    
+
     /**
      * 获取嵌套属性值
      * @param {Object} obj - 对象
@@ -323,17 +323,17 @@ export const ObjectUtils = {
     get(obj, path, defaultValue = undefined) {
         const keys = path.split('.');
         let result = obj;
-        
+
         for (const key of keys) {
             if (result == null || typeof result !== 'object') {
                 return defaultValue;
             }
             result = result[key];
         }
-        
+
         return result !== undefined ? result : defaultValue;
     },
-    
+
     /**
      * 设置嵌套属性值
      * @param {Object} obj - 对象
@@ -344,14 +344,14 @@ export const ObjectUtils = {
         const keys = path.split('.');
         const lastKey = keys.pop();
         let current = obj;
-        
+
         for (const key of keys) {
             if (!(key in current) || typeof current[key] !== 'object') {
                 current[key] = {};
             }
             current = current[key];
         }
-        
+
         current[lastKey] = value;
     }
 };
@@ -373,7 +373,7 @@ export const FileUtils = {
             reader.readAsDataURL(file);
         });
     },
-    
+
     /**
      * 读取文件为文本
      * @param {File} file - 文件对象
@@ -387,7 +387,7 @@ export const FileUtils = {
             reader.readAsText(file);
         });
     },
-    
+
     /**
      * 下载文件
      * @param {string} url - 文件URL
@@ -401,7 +401,7 @@ export const FileUtils = {
         a.click();
         document.body.removeChild(a);
     },
-    
+
     /**
      * 获取文件扩展名
      * @param {string} filename - 文件名
@@ -410,7 +410,7 @@ export const FileUtils = {
     getExtension(filename) {
         return filename.split('.').pop().toLowerCase();
     },
-    
+
     /**
      * 格式化文件大小
      * @param {number} bytes - 字节数
@@ -421,7 +421,7 @@ export const FileUtils = {
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     }
 };
 
@@ -438,7 +438,7 @@ export const DOMUtils = {
      */
     createElement(tag, attributes = {}, content = '') {
         const element = document.createElement(tag);
-        
+
         Object.entries(attributes).forEach(([key, value]) => {
             if (key === 'className') {
                 element.className = value;
@@ -450,14 +450,14 @@ export const DOMUtils = {
                 element.setAttribute(key, value);
             }
         });
-        
+
         if (content) {
             element.innerHTML = content;
         }
-        
+
         return element;
     },
-    
+
     /**
      * 查询元素
      * @param {string} selector - 选择器
@@ -467,7 +467,7 @@ export const DOMUtils = {
     query(selector, parent = document) {
         return parent.querySelector(selector);
     },
-    
+
     /**
      * 查询所有元素
      * @param {string} selector - 选择器
@@ -477,7 +477,7 @@ export const DOMUtils = {
     queryAll(selector, parent = document) {
         return parent.querySelectorAll(selector);
     },
-    
+
     /**
      * 添加事件监听器
      * @param {HTMLElement} element - 元素
@@ -488,7 +488,7 @@ export const DOMUtils = {
     on(element, event, handler, options = {}) {
         element.addEventListener(event, handler, options);
     },
-    
+
     /**
      * 移除事件监听器
      * @param {HTMLElement} element - 元素
@@ -498,7 +498,7 @@ export const DOMUtils = {
     off(element, event, handler) {
         element.removeEventListener(event, handler);
     },
-    
+
     /**
      * 切换类名
      * @param {HTMLElement} element - 元素
@@ -508,7 +508,7 @@ export const DOMUtils = {
     toggleClass(element, className, force) {
         element.classList.toggle(className, force);
     },
-    
+
     /**
      * 检查元素是否在视口中
      * @param {HTMLElement} element - 元素
@@ -542,7 +542,7 @@ export const ThrottleUtils = {
             timeoutId = setTimeout(() => func.apply(this, args), delay);
         };
     },
-    
+
     /**
      * 节流函数
      * @param {Function} func - 原函数
@@ -573,7 +573,7 @@ export const AsyncUtils = {
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     },
-    
+
     /**
      * 重试执行
      * @param {Function} fn - 执行函数
@@ -592,7 +592,7 @@ export const AsyncUtils = {
             throw error;
         }
     },
-    
+
     /**
      * 超时执行
      * @param {Promise} promise - Promise对象
@@ -602,7 +602,7 @@ export const AsyncUtils = {
     timeout(promise, timeout) {
         return Promise.race([
             promise,
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout')), timeout)
             )
         ]);
@@ -623,7 +623,7 @@ export const MathUtils = {
     clamp(value, min, max) {
         return Math.min(Math.max(value, min), max);
     },
-    
+
     /**
      * 线性插值
      * @param {number} start - 起始值
@@ -634,7 +634,7 @@ export const MathUtils = {
     lerp(start, end, t) {
         return start + (end - start) * t;
     },
-    
+
     /**
      * 映射数值范围
      * @param {number} value - 数值
@@ -647,7 +647,7 @@ export const MathUtils = {
     map(value, inMin, inMax, outMin, outMax) {
         return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
     },
-    
+
     /**
      * 生成随机数
      * @param {number} min - 最小值
@@ -657,7 +657,7 @@ export const MathUtils = {
     random(min = 0, max = 1) {
         return Math.random() * (max - min) + min;
     },
-    
+
     /**
      * 生成随机整数
      * @param {number} min - 最小值
@@ -668,6 +668,273 @@ export const MathUtils = {
         return Math.floor(this.random(min, max + 1));
     }
 };
+
+/**
+ * 日志级别枚举
+ */
+export const LogLevel = {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+    SILENT: 4
+};
+
+/**
+ * 日志管理器
+ * 提供结构化的日志记录，支持级别控制和命名空间
+ */
+export class Logger {
+    constructor(namespace = 'app', options = {}) {
+        this.namespace = namespace;
+        this.level = options.level ?? Logger.globalLevel ?? LogLevel.DEBUG;
+        this.prefix = options.prefix !== false ? `[${namespace}]` : '';
+        this.timestamps = options.timestamps ?? true;
+        this.handler = options.handler || null;
+    }
+
+    static globalLevel = LogLevel.DEBUG;
+
+    /**
+     * 设置全局日志级别
+     * @param {number} level - 日志级别
+     */
+    static setGlobalLevel(level) {
+        Logger.globalLevel = level;
+    }
+
+    /**
+     * 格式化日志消息
+     * @param {string} level - 级别名称
+     * @param {Array} args - 参数
+     * @returns {Array} 格式化后的参数
+     * @private
+     */
+    _format(level, args) {
+        const parts = [];
+        if (this.timestamps) {
+            parts.push(new Date().toLocaleTimeString('zh-CN'));
+        }
+        parts.push(level);
+        if (this.prefix) {
+            parts.push(this.prefix);
+        }
+        return [...parts, ...args];
+    }
+
+    /**
+     * 检查级别是否启用
+     * @param {number} level - 级别
+     * @returns {boolean} 是否启用
+     * @private
+     */
+    _isEnabled(level) {
+        return level >= this.level;
+    }
+
+    /**
+     * 输出日志
+     * @param {string} method - console 方法名
+     * @param {number} level - 日志级别
+     * @param {Array} args - 参数
+     * @private
+     */
+    _log(method, level, args) {
+        if (!this._isEnabled(level)) return;
+
+        const formatted = this._format(method.toUpperCase(), args);
+
+        if (this.handler) {
+            this.handler(method, formatted, this.namespace);
+        } else {
+            // eslint-disable-next-line no-console
+            console[method](...formatted);
+        }
+    }
+
+    debug(...args) {
+        this._log('log', LogLevel.DEBUG, args);
+    }
+
+    info(...args) {
+        this._log('info', LogLevel.INFO, args);
+    }
+
+    warn(...args) {
+        this._log('warn', LogLevel.WARN, args);
+    }
+
+    error(...args) {
+        this._log('error', LogLevel.ERROR, args);
+    }
+
+    /**
+     * 创建子日志器
+     * @param {string} subNamespace - 子命名空间
+     * @returns {Logger} 子日志器
+     */
+    child(subNamespace) {
+        return new Logger(`${this.namespace}:${subNamespace}`, {
+            level: this.level,
+            timestamps: this.timestamps
+        });
+    }
+
+    /**
+     * 记录性能计时
+     * @param {string} label - 标签
+     * @param {number} duration - 耗时(ms)
+     */
+    perf(label, duration) {
+        if (!this._isEnabled(LogLevel.DEBUG)) return;
+        this._log('log', LogLevel.DEBUG, [`⏱ ${label}: ${duration.toFixed(2)}ms`]);
+    }
+
+    /**
+     * 记录分组信息
+     * @param {string} label - 分组标签
+     * @param {Function} fn - 执行函数
+     */
+    group(label, fn) {
+        if (!this._isEnabled(LogLevel.DEBUG)) return;
+        // eslint-disable-next-line no-console
+        console.group(this._format('GROUP', [label]));
+        try {
+            fn();
+        } finally {
+            // eslint-disable-next-line no-console
+            console.groupEnd();
+        }
+    }
+}
+
+/**
+ * 懒加载管理器
+ * 使用 IntersectionObserver 实现图片懒加载
+ */
+export class LazyLoader {
+    constructor(options = {}) {
+        this.selector = options.selector || '.lazy-image';
+        this.rootMargin = options.rootMargin || '200px';
+        this.threshold = options.threshold || 0.01;
+        this.placeholder = options.placeholder || 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+        this.loadedClass = options.loadedClass || 'loaded';
+        this.observer = null;
+        this._init();
+    }
+
+    /**
+     * 初始化观察器
+     * @private
+     */
+    _init() {
+        if (!('IntersectionObserver' in window)) {
+            this._loadAllImages();
+            return;
+        }
+
+        this.observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    this._loadImage(entry.target);
+                }
+            });
+        }, {
+            rootMargin: this.rootMargin,
+            threshold: this.threshold
+        });
+
+        // 观察当前已有的图片
+        this.observeAll();
+    }
+
+    /**
+     * 加载单个图片
+     * @param {HTMLImageElement} img - 图片元素
+     * @private
+     */
+    _loadImage(img) {
+        const src = img.dataset.src || img.dataset.lazy;
+        if (!src) return;
+
+        // 使用 requestIdleCallback 或 setTimeout 避免阻塞主线程
+        const load = () => {
+            img.src = src;
+            img.classList.add(this.loadedClass);
+            img.removeAttribute('data-src');
+            img.removeAttribute('data-lazy');
+            this.observer?.unobserve(img);
+        };
+
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(load, { timeout: 200 });
+        } else {
+            setTimeout(load, 0);
+        }
+    }
+
+    /**
+     * 加载所有图片（降级方案）
+     * @private
+     */
+    _loadAllImages() {
+        document.querySelectorAll(this.selector).forEach(img => {
+            this._loadImage(img);
+        });
+    }
+
+    /**
+     * 观察所有匹配的图片
+     */
+    observeAll() {
+        if (!this.observer) return;
+        document.querySelectorAll(this.selector).forEach(img => {
+            this.observer.observe(img);
+        });
+    }
+
+    /**
+     * 观察单个图片元素
+     * @param {HTMLImageElement} img - 图片元素
+     */
+    observe(img) {
+        if (!this.observer) {
+            this._loadImage(img);
+            return;
+        }
+        this.observer.observe(img);
+    }
+
+    /**
+     * 停止观察单个图片元素
+     * @param {HTMLImageElement} img - 图片元素
+     */
+    unobserve(img) {
+        this.observer?.unobserve(img);
+    }
+
+    /**
+     * 为图片元素设置懒加载属性
+     * @param {HTMLImageElement} img - 图片元素
+     * @param {string} src - 真实图片地址
+     */
+    setLazyImage(img, src) {
+        img.dataset.src = src;
+        img.src = this.placeholder;
+        img.classList.add(this.selector.replace('.', ''));
+        this.observe(img);
+    }
+
+    /**
+     * 销毁观察器
+     */
+    destroy() {
+        if (this.observer) {
+            this.observer.disconnect();
+            this.observer = null;
+        }
+    }
+}
 
 // 导出所有工具函数
 export default {
@@ -680,5 +947,8 @@ export default {
     DOMUtils,
     ThrottleUtils,
     AsyncUtils,
-    MathUtils
+    MathUtils,
+    Logger,
+    LogLevel,
+    LazyLoader
 };

@@ -4,6 +4,7 @@
  */
 
 import { EVENT_TYPES } from './config.js';
+import { eventLogger } from './logger.js';
 
 /**
  * 事件管理器类
@@ -34,7 +35,7 @@ class EventManager {
         }
 
         const listeners = this.events.get(eventName);
-        
+
         // 检查监听器数量限制
         if (listeners.length >= this.maxListeners) {
             console.warn(`事件 "${eventName}" 的监听器数量已达到最大限制 ${this.maxListeners}`);
@@ -57,7 +58,7 @@ class EventManager {
         }
 
         if (this.debug) {
-            console.log(`[EventManager] 注册监听器: ${eventName}`, listenerWrapper);
+            eventLogger.info(`[EventManager] 注册监听器: ${eventName}`, listenerWrapper);
         }
 
         // 返回取消监听的函数
@@ -99,7 +100,7 @@ class EventManager {
         if (index !== -1) {
             listeners.splice(index, 1);
             if (this.debug) {
-                console.log(`[EventManager] 移除监听器: ${eventName}`);
+                eventLogger.info(`[EventManager] 移除监听器: ${eventName}`);
             }
         }
 
@@ -117,12 +118,12 @@ class EventManager {
         if (eventName) {
             this.events.delete(eventName);
             if (this.debug) {
-                console.log(`[EventManager] 移除所有监听器: ${eventName}`);
+                eventLogger.info(`[EventManager] 移除所有监听器: ${eventName}`);
             }
         } else {
             this.events.clear();
             if (this.debug) {
-                console.log('[EventManager] 移除所有事件监听器');
+                eventLogger.info('[EventManager] 移除所有事件监听器');
             }
         }
     }
@@ -136,7 +137,7 @@ class EventManager {
     emit(eventName, ...args) {
         if (!this.events.has(eventName)) {
             if (this.debug) {
-                console.log(`[EventManager] 没有监听器处理事件: ${eventName}`);
+                eventLogger.info(`[EventManager] 没有监听器处理事件: ${eventName}`);
             }
             return false;
         }
@@ -145,13 +146,13 @@ class EventManager {
         let hasListeners = false;
 
         if (this.debug) {
-            console.log(`[EventManager] 触发事件: ${eventName}`, args);
+            eventLogger.info(`[EventManager] 触发事件: ${eventName}`, args);
         }
 
         for (const listenerWrapper of listeners) {
             try {
                 const { listener, context, once, id } = listenerWrapper;
-                
+
                 // 调用监听器
                 if (context) {
                     listener.call(context, ...args);
@@ -188,13 +189,13 @@ class EventManager {
         let hasListeners = false;
 
         if (this.debug) {
-            console.log(`[EventManager] 异步触发事件: ${eventName}`, args);
+            eventLogger.info(`[EventManager] 异步触发事件: ${eventName}`, args);
         }
 
         for (const listenerWrapper of listeners) {
             try {
                 const { listener, context, once, id } = listenerWrapper;
-                
+
                 // 异步调用监听器
                 if (context) {
                     await listener.call(context, ...args);
@@ -283,21 +284,21 @@ class EventManager {
      */
     namespace(namespace) {
         const prefixEvent = (eventName) => `${namespace}:${eventName}`;
-        
+
         return {
-            on: (eventName, listener, options) => 
+            on: (eventName, listener, options) =>
                 this.on(prefixEvent(eventName), listener, options),
-            once: (eventName, listener, options) => 
+            once: (eventName, listener, options) =>
                 this.once(prefixEvent(eventName), listener, options),
-            off: (eventName, listenerOrId) => 
+            off: (eventName, listenerOrId) =>
                 this.off(prefixEvent(eventName), listenerOrId),
-            emit: (eventName, ...args) => 
+            emit: (eventName, ...args) =>
                 this.emit(prefixEvent(eventName), ...args),
-            emitAsync: (eventName, ...args) => 
+            emitAsync: (eventName, ...args) =>
                 this.emitAsync(prefixEvent(eventName), ...args),
-            waitFor: (eventName, timeout) => 
+            waitFor: (eventName, timeout) =>
                 this.waitFor(prefixEvent(eventName), timeout),
-            listenerCount: (eventName) => 
+            listenerCount: (eventName) =>
                 this.listenerCount(prefixEvent(eventName))
         };
     }
@@ -487,7 +488,7 @@ class TypedEventManager extends EventManager {
 const eventManager = new TypedEventManager();
 
 // 在开发环境下启用调试
-if (typeof process !== 'undefined' && process?.env?.NODE_ENV === 'development') {
+if (typeof globalThis !== 'undefined' && globalThis.process?.env?.NODE_ENV === 'development') {
     eventManager.setDebug(true);
 }
 
