@@ -43,11 +43,39 @@ export const CONFIG = {
         CACHE_EXPIRY: 24 * 60 * 60 * 1000 // 24小时
     },
 
-    // GitHub配置
-    GITHUB: {
-        API_BASE: 'https://api.github.com',
-        UPLOAD_TIMEOUT: 30000,
-        RETRY_COUNT: 3
+    // 后端API配置
+    API: {
+        BASE_URL: localStorage.getItem('api_base_url') || 'http://localhost:8000/api/v1',
+        TIMEOUT: 30000,
+        RETRY_COUNT: 3,
+        RETRY_DELAY: 1000,
+        CACHE_ENABLED: true,
+        CACHE_TTL: 5 * 60 * 1000, // 5分钟
+        HEALTH_CHECK_INTERVAL: 30000 // 30秒
+    },
+
+    // 多模态配置
+    MULTIMODAL: {
+        ENABLED: true,
+        DEFAULT_TASK: 'describe',
+        MAX_TEXT_LENGTH: 2000,
+        SUPPORTED_TASKS: ['describe', 'caption', 'story', 'poem']
+    },
+
+    // Prompt智能配置
+    PROMPT: {
+        ENABLED: true,
+        MAX_LENGTH: 4000,
+        DEFAULT_TARGET_MODEL: 'sdxl',
+        DEFAULT_LANGUAGE: 'zh',
+        HISTORY_SIZE: 50
+    },
+
+    // Web Worker配置
+    WORKER: {
+        ENABLED: true,
+        MAX_CONCURRENT: 3,
+        FALLBACK_TO_MAIN_THREAD: true
     },
 
     // 主题配置

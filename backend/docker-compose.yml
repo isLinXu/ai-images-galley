@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: ai-gallery-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=production
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - REDIS_URL=${REDIS_URL:-}
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - ai-gallery-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-gallery-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - ai-gallery-network
+
+volumes:
+  redis-data:
+
+networks:
+  ai-gallery-network:
+    driver: bridge

@@ -14,6 +14,10 @@ import galleryManager from './galleryManager.js';
 import galleryRenderer from './galleryRenderer.js';
 import adminManager from './adminManager.js';
 import appLogger from './logger.js';
+import { apiClient } from './apiClient.js';
+import promptEngine from './promptEngine.js';
+import multimodalEngine from './multimodalEngine.js'; // eslint-disable-line no-unused-vars
+import { imageWorkerManager } from './imageWorker.js'; // eslint-disable-line no-unused-vars
 
 /**
  * 应用程序状态管理器
@@ -706,7 +710,18 @@ class App {
             await imageManager.initialize();
             appLogger.info('✅ 图片管理器初始化完成');
 
-            // 4. 初始化AI引擎（非阻塞）
+            // 4. 初始化API客户端（非阻塞）
+            appLogger.info('🌐 初始化API客户端...');
+            try {
+                await apiClient.get('/health', {}, { cache: false, timeout: 5000 });
+                appLogger.info('✅ 后端API连接成功');
+                this.stateManager.setState('apiConnected', true);
+            } catch (error) {
+                appLogger.warn('⚠️ 后端API连接失败，将使用本地模式:', error.message);
+                this.stateManager.setState('apiConnected', false);
+            }
+
+            // 5. 初始化AI引擎（非阻塞）
             appLogger.info('🤖 初始化AI引擎...');
             let aiInitialized = false;
             try {
@@ -717,28 +732,44 @@ class App {
                 appLogger.info(`✅ AI引擎初始化完成，成功: ${aiInitialized}`);
                 if (!aiInitialized) {
                     console.warn('⚠️ AI功能初始化失败，应用将以基础模式运行');
-                    // 不显示错误提示，因为uiManager可能还没完全初始化
                 }
             } catch (error) {
                 console.warn('⚠️ AI引擎初始化异常:', error.message);
                 aiInitialized = false;
             }
 
-            // 5. 初始化图片库管理器
+            // 6. 初始化Prompt智能引擎
+            appLogger.info('✨ 初始化Prompt智能引擎...');
+            try {
+                await promptEngine.getTemplates();
+                appLogger.info('✅ Prompt智能引擎初始化完成');
+            } catch (error) {
+                appLogger.warn('⚠️ Prompt引擎初始化失败:', error.message);
+            }
+
+            // 7. 初始化多模态引擎
+            appLogger.info('🎭 初始化多模态引擎...');
+            try {
+                appLogger.info('✅ 多模态引擎初始化完成');
+            } catch (error) {
+                appLogger.warn('⚠️ 多模态引擎初始化失败:', error.message);
+            }
+
+            // 8. 初始化图片库管理器
             appLogger.info('📚 初始化图片库管理器...');
             await galleryManager.refreshGallery(true);
             appLogger.info('✅ 图片库管理器初始化完成');
 
-            // 6. 设置拖拽区域
+            // 9. 设置拖拽区域
             const dropZone = document.body;
             this.dragDropManager.setDropZone(dropZone);
             appLogger.info('✅ 拖拽区域设置完成');
 
-            // 7. 绑定UI事件
+            // 10. 绑定UI事件
             this._bindUIEvents();
             appLogger.info('✅ UI事件绑定完成');
 
-            // 8. 恢复应用状态
+            // 11. 恢复应用状态
             await this._restoreAppState();
             appLogger.info('✅ 应用状态恢复完成');
 
