@@ -13,11 +13,11 @@ import aiEngine from './aiEngine.js';
 import galleryManager from './galleryManager.js';
 import galleryRenderer from './galleryRenderer.js';
 import adminManager from './adminManager.js';
+import imageUploader from './uploader.js';
 import appLogger from './logger.js';
-import { apiClient } from './apiClient.js';
+import { apiClient, analysisAPI } from './apiClient.js';
 import promptEngine from './promptEngine.js';
 import multimodalEngine from './multimodalEngine.js'; // eslint-disable-line no-unused-vars
-import { imageWorkerManager } from './imageWorker.js'; // eslint-disable-line no-unused-vars
 
 /**
  * 应用程序状态管理器
@@ -215,64 +215,104 @@ class KeyboardShortcutManager {
      */
     _initializeShortcuts() {
         // 图片库快捷键
-        this.register('ctrl+f', () => {
-            const searchInput = document.querySelector('#search-input');
-            if (searchInput) {
-                searchInput.focus();
-            }
-        }, { description: '聚焦搜索框', category: 'gallery' });
+        this.register(
+            'ctrl+f',
+            () => {
+                const searchInput = document.querySelector('#search-input');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            },
+            { description: '聚焦搜索框', category: 'gallery' }
+        );
 
-        this.register('ctrl+a', () => {
-            const images = galleryManager.getDisplayedImages();
-            const selectedImages = new Set(images.map(img => img.id));
-            this.appStateManager.setState('selectedImages', selectedImages);
-        }, { description: '全选图片', category: 'gallery' });
+        this.register(
+            'ctrl+a',
+            () => {
+                const images = galleryManager.getDisplayedImages();
+                const selectedImages = new Set(images.map((img) => img.id));
+                this.appStateManager.setState('selectedImages', selectedImages);
+            },
+            { description: '全选图片', category: 'gallery' }
+        );
 
-        this.register('escape', () => {
-            // 关闭模态框或退出全屏
-            if (this.appStateManager.getState('fullscreenMode')) {
-                this.appStateManager.setState('fullscreenMode', false);
-            } else {
-                uiManager.modalManager.closeAll();
-            }
-        }, { description: '关闭模态框/退出全屏', category: 'navigation' });
+        this.register(
+            'escape',
+            () => {
+                // 关闭模态框或退出全屏
+                if (this.appStateManager.getState('fullscreenMode')) {
+                    this.appStateManager.setState('fullscreenMode', false);
+                } else {
+                    uiManager.modalManager.closeAll();
+                }
+            },
+            { description: '关闭模态框/退出全屏', category: 'navigation' }
+        );
 
-        this.register('f11', () => {
-            this.appStateManager.toggleState('fullscreenMode');
-        }, { description: '切换全屏模式', category: 'view' });
+        this.register(
+            'f11',
+            () => {
+                this.appStateManager.toggleState('fullscreenMode');
+            },
+            { description: '切换全屏模式', category: 'view' }
+        );
 
         // 视图切换快捷键
-        this.register('ctrl+1', () => {
-            galleryManager.viewManager.setViewMode('grid');
-        }, { description: '网格视图', category: 'view' });
+        this.register(
+            'ctrl+1',
+            () => {
+                galleryManager.viewManager.setViewMode('grid');
+            },
+            { description: '网格视图', category: 'view' }
+        );
 
-        this.register('ctrl+2', () => {
-            galleryManager.viewManager.setViewMode('list');
-        }, { description: '列表视图', category: 'view' });
+        this.register(
+            'ctrl+2',
+            () => {
+                galleryManager.viewManager.setViewMode('list');
+            },
+            { description: '列表视图', category: 'view' }
+        );
 
-        this.register('ctrl+3', () => {
-            galleryManager.viewManager.setViewMode('masonry');
-        }, { description: '瀑布流视图', category: 'view' });
+        this.register(
+            'ctrl+3',
+            () => {
+                galleryManager.viewManager.setViewMode('masonry');
+            },
+            { description: '瀑布流视图', category: 'view' }
+        );
 
         // 管理员快捷键
-        this.register('ctrl+shift+a', () => {
-            if (adminManager.isAdminMode) {
-                const adminPanel = document.querySelector('#admin-panel-modal');
-                if (adminPanel) {
-                    adminPanel.style.display = adminPanel.style.display === 'none' ? 'flex' : 'none';
+        this.register(
+            'ctrl+shift+a',
+            () => {
+                if (adminManager.isAdminMode) {
+                    const adminPanel = document.querySelector('#admin-panel-modal');
+                    if (adminPanel) {
+                        adminPanel.style.display = adminPanel.style.display === 'none' ? 'flex' : 'none';
+                    }
                 }
-            }
-        }, { description: '切换管理员面板', category: 'admin' });
+            },
+            { description: '切换管理员面板', category: 'admin' }
+        );
 
         // 主题切换
-        this.register('ctrl+shift+t', () => {
-            uiManager.themeManager.toggleTheme();
-        }, { description: '切换主题', category: 'ui' });
+        this.register(
+            'ctrl+shift+t',
+            () => {
+                uiManager.themeManager.toggleTheme();
+            },
+            { description: '切换主题', category: 'ui' }
+        );
 
         // 刷新
-        this.register('f5', () => {
-            galleryManager.refreshGallery(true);
-        }, { description: '刷新图片库', category: 'gallery' });
+        this.register(
+            'f5',
+            () => {
+                galleryManager.refreshGallery(true);
+            },
+            { description: '刷新图片库', category: 'gallery' }
+        );
     }
 
     /**
@@ -282,11 +322,7 @@ class KeyboardShortcutManager {
      * @private
      */
     _normalizeShortcut(combination) {
-        return combination.toLowerCase()
-            .replace(/\s+/g, '')
-            .split('+')
-            .sort()
-            .join('+');
+        return combination.toLowerCase().replace(/\s+/g, '').split('+').sort().join('+');
     }
 
     /**
@@ -371,49 +407,64 @@ class DragDropManager {
      * @private
      */
     async _handleFiles(files) {
-        const imageFiles = Array.from(files).filter(file =>
-            file.type.startsWith('image/')
-        );
+        const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith('image/'));
 
         if (imageFiles.length === 0) {
-            uiManager.tooltipManager.warning('请拖拽图片文件');
+            uiManager.tooltipManager.warning('请选择图片文件');
             return;
         }
 
-        // 显示上传进度
-        uiManager.progressManager.show('正在上传图片...');
+        if (!adminManager.isAdminMode && !adminManager.getAuthToken()) {
+            uiManager.tooltipManager.warning('请先以管理员身份登录 GitHub');
+            uiManager.modalManager.show('admin-login-modal');
+            return;
+        }
+
+        const progressId = `upload-${Date.now()}`;
+        uiManager.progressManager.create(progressId, {
+            title: '正在上传图片...',
+            showPercentage: true
+        });
 
         try {
-            for (let i = 0; i < imageFiles.length; i++) {
-                const file = imageFiles[i];
-                const progress = ((i + 1) / imageFiles.length) * 100;
+            const result = await imageUploader.uploadFiles(imageFiles, {
+                onProgress: ({ current, total, fileName }) => {
+                    const progress = (current / total) * 100;
+                    uiManager.progressManager.update(
+                        progressId,
+                        Math.round(progress),
+                        `上传中 (${current}/${total}): ${fileName}`
+                    );
+                    eventManager.emitUploadProgress({
+                        current,
+                        total,
+                        fileName,
+                        progress
+                    });
+                }
+            });
 
-                uiManager.progressManager.update(progress, `上传中: ${file.name}`);
-
-                await imageManager.loadImageFromFile(file);
-
-                // 触发上传进度事件
-                eventManager.emitUploadProgress({
-                    current: i + 1,
-                    total: imageFiles.length,
-                    fileName: file.name,
-                    progress
+            if (result.uploaded.length > 0) {
+                await galleryManager.refreshGallery({ force: true, showLoading: false });
+                eventManager.emitUploadComplete({
+                    count: result.uploaded.length,
+                    timestamp: Date.now()
                 });
             }
 
-            uiManager.tooltipManager.success(`成功上传 ${imageFiles.length} 张图片`);
-
-            // 触发上传完成事件
-            eventManager.emitUploadComplete({
-                count: imageFiles.length,
-                timestamp: Date.now()
-            });
-
+            const summary = [`成功 ${result.uploaded.length}`];
+            if (result.skipped.length) summary.push(`跳过 ${result.skipped.length}`);
+            if (result.failed.length) summary.push(`失败 ${result.failed.length}`);
+            if (result.failed.length > 0) {
+                uiManager.tooltipManager.error(`${summary.join(' / ')}：${result.failed[0].error}`);
+            } else {
+                uiManager.tooltipManager.success(summary.join(' / '));
+            }
         } catch (error) {
             console.error('文件上传失败:', error);
-            uiManager.tooltipManager.error('文件上传失败');
+            uiManager.tooltipManager.error(error.message || '文件上传失败');
         } finally {
-            uiManager.progressManager.hide();
+            uiManager.progressManager.remove(progressId);
         }
     }
 
@@ -423,7 +474,7 @@ class DragDropManager {
      */
     _bindEvents() {
         // 防止默认拖拽行为
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach((eventName) => {
             document.addEventListener(eventName, (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -566,9 +617,9 @@ class PerformanceMonitor {
         };
 
         // 计算平均值
-        ['imageLoadTimes', 'searchTimes', 'filterTimes'].forEach(metric => {
+        ['imageLoadTimes', 'searchTimes', 'filterTimes'].forEach((metric) => {
             if (Array.isArray(report[metric]) && report[metric].length > 0) {
-                const values = report[metric].map(item => item.value);
+                const values = report[metric].map((item) => item.value);
                 report[`${metric}Average`] = values.reduce((a, b) => a + b, 0) / values.length;
             }
         });
@@ -635,7 +686,7 @@ class PerformanceMonitor {
      * 清理观察器
      */
     cleanup() {
-        this.observers.forEach(observer => {
+        this.observers.forEach((observer) => {
             observer.disconnect();
         });
         this.observers.clear();
@@ -657,6 +708,7 @@ class App {
             threshold: 0.01
         });
         this.galleryRenderer = galleryRenderer;
+        this.currentModalImage = null;
 
         this.isInitialized = false;
         this.initializationPromise = null;
@@ -710,54 +762,62 @@ class App {
             await imageManager.initialize();
             appLogger.info('✅ 图片管理器初始化完成');
 
-            // 4. 初始化API客户端（非阻塞）
-            appLogger.info('🌐 初始化API客户端...');
-            try {
-                await apiClient.get('/health', {}, { cache: false, timeout: 5000 });
-                appLogger.info('✅ 后端API连接成功');
-                this.stateManager.setState('apiConnected', true);
-            } catch (error) {
-                appLogger.warn('⚠️ 后端API连接失败，将使用本地模式:', error.message);
+            // 4. 初始化API客户端（仅在显式配置后启用，避免默认连接 localhost 造成控制台噪音）
+            if (CONFIG.API.ENABLED) {
+                appLogger.info('🌐 初始化API客户端...');
+                apiClient
+                    .get('/health', {}, { cache: false })
+                    .then(() => {
+                        appLogger.info('✅ 后端API连接成功');
+                        this.stateManager.setState('apiConnected', true);
+                    })
+                    .catch((error) => {
+                        appLogger.warn('⚠️ 后端API连接失败，将使用本地模式:', error.message);
+                        this.stateManager.setState('apiConnected', false);
+                    });
+            } else {
+                appLogger.info('ℹ️ 未配置后端 API，使用本地模式');
                 this.stateManager.setState('apiConnected', false);
             }
 
-            // 5. 初始化AI引擎（非阻塞）
-            appLogger.info('🤖 初始化AI引擎...');
-            let aiInitialized = false;
-            try {
-                aiInitialized = await Promise.race([
-                    aiEngine.initialize(),
-                    new Promise(resolve => setTimeout(() => resolve(false), 10000)) // 10秒超时
-                ]);
-                appLogger.info(`✅ AI引擎初始化完成，成功: ${aiInitialized}`);
-                if (!aiInitialized) {
-                    console.warn('⚠️ AI功能初始化失败，应用将以基础模式运行');
-                }
-            } catch (error) {
-                console.warn('⚠️ AI引擎初始化异常:', error.message);
-                aiInitialized = false;
+            // 5. 初始化AI引擎（可选；模块化预览版默认关闭）
+            if (CONFIG.AI.ENABLED) {
+                appLogger.info('🤖 后台初始化AI引擎...');
+                aiEngine
+                    .initialize()
+                    .then((success) => {
+                        appLogger.info(`✅ AI引擎初始化完成，成功: ${success}`);
+                        if (!success) {
+                            console.warn('⚠️ AI功能初始化失败，应用将以基础模式运行');
+                        }
+                    })
+                    .catch((error) => {
+                        console.warn('⚠️ AI引擎初始化异常:', error.message);
+                    });
+            } else {
+                appLogger.info('ℹ️ AI 分析默认关闭，可在 config.js 中开启 CONFIG.AI.ENABLED');
             }
 
-            // 6. 初始化Prompt智能引擎
-            appLogger.info('✨ 初始化Prompt智能引擎...');
-            try {
-                await promptEngine.getTemplates();
-                appLogger.info('✅ Prompt智能引擎初始化完成');
-            } catch (error) {
-                appLogger.warn('⚠️ Prompt引擎初始化失败:', error.message);
+            // 6. 初始化Prompt智能引擎（仅在配置后端后请求远端模板）
+            if (CONFIG.API.ENABLED) {
+                appLogger.info('✨ 后台初始化Prompt智能引擎...');
+                promptEngine
+                    .getTemplates()
+                    .then(() => appLogger.info('✅ Prompt智能引擎初始化完成'))
+                    .catch((error) => appLogger.warn('⚠️ Prompt引擎初始化失败:', error.message));
+            } else {
+                appLogger.info('ℹ️ Prompt 使用本地模板');
             }
 
             // 7. 初始化多模态引擎
             appLogger.info('🎭 初始化多模态引擎...');
-            try {
-                appLogger.info('✅ 多模态引擎初始化完成');
-            } catch (error) {
-                appLogger.warn('⚠️ 多模态引擎初始化失败:', error.message);
-            }
+            appLogger.info('✅ 多模态引擎初始化完成');
 
             // 8. 初始化图片库管理器
             appLogger.info('📚 初始化图片库管理器...');
-            await galleryManager.refreshGallery(true);
+            this._bindUIEvents();
+            await galleryManager.refreshGallery({ force: true, showLoading: false });
+            this._syncGalleryUi();
             appLogger.info('✅ 图片库管理器初始化完成');
 
             // 9. 设置拖拽区域
@@ -765,8 +825,7 @@ class App {
             this.dragDropManager.setDropZone(dropZone);
             appLogger.info('✅ 拖拽区域设置完成');
 
-            // 10. 绑定UI事件
-            this._bindUIEvents();
+            // 10. UI事件已在上方绑定
             appLogger.info('✅ UI事件绑定完成');
 
             // 11. 恢复应用状态
@@ -793,7 +852,6 @@ class App {
 
             // 显示欢迎消息
             uiManager.tooltipManager.success('AI智能相册系统已就绪', { duration: 3000 });
-
         } catch (error) {
             console.error('应用程序初始化失败:', error);
 
@@ -870,37 +928,145 @@ class App {
                     this.performanceMonitor.startMeasure('search');
                     galleryManager.searchImages(e.target.value);
                     this.performanceMonitor.endMeasure('search');
-                }, 300);
+                }, CONFIG.UI.SEARCH_DEBOUNCE);
             });
         }
 
-        // 文件上传按钮
+        // 搜索清除按钮
+        const searchClear = document.querySelector('#search-clear');
+        if (searchInput && searchClear) {
+            const syncClearButton = () => {
+                searchClear.classList.toggle('hidden', searchInput.value.length === 0);
+            };
+            searchInput.addEventListener('input', syncClearButton);
+            searchClear.addEventListener('click', () => {
+                searchInput.value = '';
+                syncClearButton();
+                galleryManager.searchImages('');
+                searchInput.focus();
+            });
+        }
+
+        // 上传按钮：登录后通过 GitHub Contents API 持久化
         const uploadButton = document.querySelector('#upload-button');
-        if (uploadButton) {
+        const uploadInput = document.querySelector('#upload-input');
+        if (uploadButton && uploadInput) {
             uploadButton.addEventListener('click', () => {
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.multiple = true;
-                fileInput.accept = 'image/*';
-                fileInput.addEventListener('change', (e) => {
-                    if (e.target.files.length > 0) {
-                        this.dragDropManager._handleFiles(e.target.files);
-                    }
-                });
-                fileInput.click();
+                if (!adminManager.isAdminMode && !adminManager.getAuthToken()) {
+                    uiManager.tooltipManager.warning('请先以管理员身份登录 GitHub');
+                    uiManager.modalManager.show('admin-login-modal');
+                    return;
+                }
+                uploadInput.click();
+            });
+            uploadInput.addEventListener('change', (event) => {
+                if (event.target.files && event.target.files.length > 0) {
+                    this.dragDropManager._handleFiles(event.target.files);
+                }
+                event.target.value = '';
             });
         }
 
-        // 管理员登录按钮
+        // 管理员登录
         const adminButton = document.querySelector('#admin-button');
         if (adminButton) {
             adminButton.addEventListener('click', () => {
-                const modal = document.querySelector('#admin-login-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
+                uiManager.modalManager.show('admin-login-modal');
+            });
+        }
+
+        const adminForm = document.querySelector('#admin-login-form');
+        if (adminForm) {
+            adminForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const tokenInput = document.querySelector('#github-token');
+                const errorBox = document.querySelector('#login-error');
+                const submitButton = adminForm.querySelector('button[type="submit"]');
+                const token = tokenInput ? tokenInput.value.trim() : '';
+
+                if (errorBox) {
+                    errorBox.classList.add('hidden');
+                    errorBox.textContent = '';
+                }
+
+                if (!token) {
+                    if (errorBox) {
+                        errorBox.textContent = '请输入 GitHub Token';
+                        errorBox.classList.remove('hidden');
+                    }
+                    return;
+                }
+
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+                try {
+                    const result = await adminManager.login(token);
+                    if (result.success) {
+                        if (tokenInput) tokenInput.value = '';
+                        uiManager.modalManager.hide('admin-login-modal');
+                        uiManager.tooltipManager.success(
+                            `欢迎，${result.user?.name || result.user?.login || '管理员'}`
+                        );
+                        const status = document.querySelector('#admin-button');
+                        if (status) {
+                            status.setAttribute('aria-label', `管理员：${result.user?.login || '已登录'}`);
+                        }
+                    } else if (errorBox) {
+                        errorBox.textContent = result.error || '登录失败';
+                        errorBox.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    if (errorBox) {
+                        errorBox.textContent = error.message || '登录失败';
+                        errorBox.classList.remove('hidden');
+                    }
+                } finally {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
                 }
             });
         }
+
+        const tokenVisibility = document.querySelector('#toggle-token-visibility');
+        if (tokenVisibility) {
+            tokenVisibility.addEventListener('click', () => {
+                const input = document.querySelector('#github-token');
+                if (!input) return;
+                const isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                const icon = tokenVisibility.querySelector('i');
+                if (icon) {
+                    icon.className = isPassword ? 'fas fa-eye-slash' : 'fas fa-eye';
+                }
+            });
+        }
+
+        // 图片详情标签页与 AI 分析
+        document.querySelectorAll('#image-modal .tab-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const tab = button.dataset.tab || 'info';
+                this._switchModalTab(tab);
+                if (tab === 'ai' && this.currentModalImage && !this.currentModalImage.aiAnalyzed) {
+                    this._analyzeCurrentImageWithBackend();
+                }
+            });
+        });
+
+        const reanalyzeButton = document.querySelector('#reanalyze-btn');
+        if (reanalyzeButton) {
+            reanalyzeButton.addEventListener('click', () => {
+                if (this.currentModalImage) {
+                    this._analyzeCurrentImageWithBackend();
+                }
+            });
+        }
+
+        // 模态框关闭按钮
+        document.querySelectorAll('.modal-close').forEach((button) => {
+            button.addEventListener('click', () => uiManager.modalManager.hideAll());
+        });
 
         // 主题切换按钮
         const themeButton = document.querySelector('#theme-toggle');
@@ -908,6 +1074,369 @@ class App {
             themeButton.addEventListener('click', () => {
                 uiManager.themeManager.toggleTheme();
             });
+        }
+
+        // 视图切换
+        document.querySelectorAll('.view-btn').forEach((button) => {
+            button.addEventListener('click', () => {
+                const viewMode = button.dataset.view;
+                if (viewMode) {
+                    galleryManager.viewManager.setViewMode(viewMode);
+                }
+            });
+        });
+
+        // 排序
+        const sortSelect = document.querySelector('#sort-select');
+        if (sortSelect) {
+            sortSelect.addEventListener('change', () => {
+                const [rawField, direction] = sortSelect.value.split('-');
+                const field = rawField === 'date' ? 'uploadTime' : rawField;
+                galleryManager.sortManager.setSort(field, direction || 'desc');
+                galleryManager.paginationManager.setCurrentPage(1);
+            });
+        }
+
+        // 过滤器
+        const dateFilter = document.querySelector('#date-filter');
+        if (dateFilter) {
+            dateFilter.addEventListener('change', () => {
+                const value = dateFilter.value;
+                if (!value) {
+                    galleryManager.filterManager.setFilter('dateRange', null);
+                    return;
+                }
+                const now = new Date();
+                const start = new Date(now);
+                if (value === 'today') {
+                    start.setHours(0, 0, 0, 0);
+                } else if (value === 'week') {
+                    start.setDate(start.getDate() - 7);
+                } else if (value === 'month') {
+                    start.setMonth(start.getMonth() - 1);
+                } else if (value === 'year') {
+                    start.setFullYear(start.getFullYear() - 1);
+                }
+                galleryManager.filterManager.setFilter('dateRange', {
+                    start: start.getTime(),
+                    end: Date.now()
+                });
+            });
+        }
+
+        const typeFilter = document.querySelector('#type-filter');
+        if (typeFilter) {
+            typeFilter.addEventListener('change', () => {
+                galleryManager.filterManager.setFilter('fileType', typeFilter.value || null);
+            });
+        }
+
+        const clearFilters = document.querySelector('#clear-filters');
+        if (clearFilters) {
+            clearFilters.addEventListener('click', () => {
+                galleryManager.filterManager.clearAllFilters();
+                if (dateFilter) dateFilter.value = '';
+                if (typeFilter) typeFilter.value = '';
+                const aiTagFilter = document.querySelector('#ai-tag-filter');
+                if (aiTagFilter) aiTagFilter.value = '';
+                galleryManager.applyFilters();
+            });
+        }
+
+        // 分页
+        const prevPage = document.querySelector('#prev-page');
+        const nextPage = document.querySelector('#next-page');
+        if (prevPage) {
+            prevPage.addEventListener('click', () => galleryManager.paginationManager.previousPage());
+        }
+        if (nextPage) {
+            nextPage.addEventListener('click', () => galleryManager.paginationManager.nextPage());
+        }
+        const pageNumbers = document.querySelector('#page-numbers');
+        if (pageNumbers) {
+            pageNumbers.addEventListener('click', (event) => {
+                const button = event.target.closest('[data-page]');
+                if (button) {
+                    galleryManager.paginationManager.setCurrentPage(Number(button.dataset.page));
+                }
+            });
+        }
+
+        // 画廊事件
+        eventManager.on('gallery:display-updated', (data) => this._renderGalleryChrome(data));
+        eventManager.on('gallery:view-changed', (data) => this._syncViewButtons(data.viewMode));
+        eventManager.on('gallery:rendered', () => this.lazyLoader.observeAll());
+        eventManager.on('gallery:image-clicked', (data) => {
+            if (data && data.image) {
+                this._openImageModal(data.image);
+            }
+        });
+    }
+
+    /**
+     * 同步画廊外围 UI（数量与分页）
+     * @private
+     */
+    _syncGalleryUi() {
+        this._renderGalleryChrome({
+            displayedImages: galleryManager.getDisplayedImages(),
+            paginationInfo: galleryManager.paginationManager.getPaginationInfo(),
+            viewMode: galleryManager.viewManager.getCurrentView()
+        });
+        this._syncViewButtons(galleryManager.viewManager.getCurrentView());
+    }
+
+    /**
+     * 渲染图片数量与分页控件
+     * @param {Object} data - display-updated 事件数据
+     * @private
+     */
+    _renderGalleryChrome(data = {}) {
+        const count = document.querySelector('#image-count');
+        if (count) {
+            const info = data.paginationInfo || {};
+            const total = info.totalItems || 0;
+            const start = info.startItem || 0;
+            const end = info.endItem || 0;
+            count.textContent = total > 0 ? `${start}–${end} / 共 ${total} 张` : '0 张图片';
+        }
+
+        const pagination = document.querySelector('#pagination');
+        const pageNumbers = document.querySelector('#page-numbers');
+        const prevPage = document.querySelector('#prev-page');
+        const nextPage = document.querySelector('#next-page');
+        const info = data.paginationInfo || {};
+        const totalPages = info.totalPages || 0;
+
+        if (pagination) {
+            pagination.classList.toggle('hidden', totalPages <= 1);
+        }
+        if (prevPage) {
+            prevPage.disabled = !info.hasPrevious;
+        }
+        if (nextPage) {
+            nextPage.disabled = !info.hasNext;
+        }
+        if (!pageNumbers) return;
+
+        pageNumbers.innerHTML = '';
+        if (totalPages <= 1) return;
+
+        const current = info.currentPage || 1;
+        const pages = galleryManager.paginationManager.getPageRange(7);
+        pages.forEach((page) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.page = String(page);
+            button.className = `pagination-btn${page === current ? ' active' : ''}`;
+            button.textContent = String(page);
+            button.setAttribute('aria-label', `第 ${page} 页`);
+            if (page === current) {
+                button.setAttribute('aria-current', 'page');
+            }
+            pageNumbers.appendChild(button);
+        });
+    }
+
+    /**
+     * 同步视图按钮状态
+     * @param {string} viewMode - 当前视图
+     * @private
+     */
+    _syncViewButtons(viewMode) {
+        document.querySelectorAll('.view-btn').forEach((button) => {
+            const active = button.dataset.view === viewMode;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-checked', active ? 'true' : 'false');
+        });
+    }
+
+    /**
+     * 打开图片详情模态框
+     * @param {Object} image - 图片数据
+     * @private
+     */
+    _openImageModal(image) {
+        const modal = document.querySelector('#image-modal');
+        if (!modal) return;
+
+        this.currentModalImage = image;
+        this._switchModalTab('info');
+
+        const modalImage = document.querySelector('#modal-image');
+        if (modalImage) {
+            modalImage.src = image.url;
+            modalImage.alt = image.name || '';
+        }
+
+        const title = document.querySelector('#modal-title');
+        if (title) title.textContent = image.name || '图片详情';
+
+        const setText = (selector, value) => {
+            const element = document.querySelector(selector);
+            if (element) element.textContent = value;
+        };
+
+        setText('#info-filename', image.name || '未知');
+        setText('#info-filesize', image.size ? `${(image.size / 1024).toFixed(1)} KB` : '未知');
+        setText('#info-dimensions', image.width && image.height ? `${image.width} × ${image.height}` : '未知');
+        setText('#info-upload-time', image.timestamp ? new Date(image.timestamp).toLocaleString('zh-CN') : '未知');
+
+        const aiTags = document.querySelector('#ai-tags');
+        if (aiTags) {
+            aiTags.innerHTML = '';
+            const tags = Array.isArray(image.aiTags) ? image.aiTags : [];
+            if (tags.length === 0) {
+                const empty = document.createElement('span');
+                empty.className = 'text-sm text-gray-500';
+                empty.textContent = '暂无 AI 标签';
+                aiTags.appendChild(empty);
+            } else {
+                tags.forEach((tag) => {
+                    const chip = document.createElement('span');
+                    chip.className = 'tag-item text-sm px-2 py-1 rounded-full';
+                    chip.textContent = typeof tag === 'string' ? tag : tag.label || '';
+                    aiTags.appendChild(chip);
+                });
+            }
+        }
+        setText('#ai-description', image.aiDescription || '暂无 AI 描述');
+        const objects = document.querySelector('#detected-objects');
+        if (objects) {
+            objects.innerHTML = '';
+            const detections = Array.isArray(image.detections) ? image.detections : [];
+            if (detections.length === 0) {
+                const empty = document.createElement('p');
+                empty.className = 'text-sm text-gray-500';
+                empty.textContent = '暂无检测结果';
+                objects.appendChild(empty);
+            }
+        }
+
+        setText(
+            '#ai-status',
+            CONFIG.API.ENABLED
+                ? '点击「AI分析」或「重新分析」调用后端视觉模型。'
+                : 'AI 分析需要后端 API：请先启动 backend 并设置 localStorage.api_base_url 后刷新。'
+        );
+
+        uiManager.modalManager.show('image-modal');
+    }
+
+    /**
+     * 切换图片详情模态框标签页
+     * @param {string} tab - info | ai | notes
+     * @private
+     */
+    _switchModalTab(tab) {
+        document.querySelectorAll('#image-modal .tab-btn').forEach((button) => {
+            const active = button.dataset.tab === tab;
+            button.classList.toggle('active', active);
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        ['info', 'ai', 'notes'].forEach((name) => {
+            const content = document.querySelector(`#tab-${name}`);
+            if (content) {
+                content.classList.toggle('hidden', name !== tab);
+            }
+        });
+    }
+
+    /**
+     * 调用后端真实 AI 分析当前图片
+     * @private
+     */
+    async _analyzeCurrentImageWithBackend() {
+        const image = this.currentModalImage;
+        const status = document.querySelector('#ai-status');
+        const description = document.querySelector('#ai-description');
+        const tagsContainer = document.querySelector('#ai-tags');
+        const objectsContainer = document.querySelector('#detected-objects');
+        const button = document.querySelector('#reanalyze-btn');
+
+        if (!image) return;
+        if (!CONFIG.API.ENABLED) {
+            if (status) {
+                status.textContent = 'AI 分析需要后端 API：请先启动 backend，并设置 localStorage.api_base_url 后刷新。';
+            }
+            return;
+        }
+
+        const setStatus = (text) => {
+            if (status) status.textContent = text;
+        };
+        const setDescription = (text) => {
+            if (description) description.textContent = text;
+        };
+
+        if (button) button.disabled = true;
+        setStatus('正在调用后端视觉模型...');
+        setDescription('分析中...');
+        if (tagsContainer) tagsContainer.innerHTML = '';
+        if (objectsContainer) objectsContainer.innerHTML = '';
+
+        try {
+            const imageUrl = new URL(image.url, location.href).href;
+            const result = await analysisAPI.analyzeUrl({
+                image_url: imageUrl,
+                analysis_types: ['all'],
+                language: 'zh',
+                confidence_threshold: 0.3
+            });
+
+            if (!result || !result.success || !result.data) {
+                throw new Error(result?.message || 'AI 分析失败');
+            }
+
+            const data = result.data;
+            const tags = Array.isArray(data.tags) ? data.tags : [];
+            if (tagsContainer) {
+                tagsContainer.innerHTML = '';
+                tags.forEach((tag) => {
+                    const chip = document.createElement('span');
+                    chip.className = 'tag-item text-sm px-2 py-1 rounded-full';
+                    chip.textContent = String(tag);
+                    tagsContainer.appendChild(chip);
+                });
+            }
+
+            const caption = data.caption?.caption || '';
+            setDescription(caption || (tags.length ? tags.join('、') : '暂无 AI 描述'));
+
+            const detections = Array.isArray(data.detections) ? data.detections : [];
+            if (objectsContainer) {
+                objectsContainer.innerHTML = '';
+                if (detections.length === 0) {
+                    const empty = document.createElement('p');
+                    empty.className = 'text-sm text-gray-500';
+                    empty.textContent = '暂无检测结果';
+                    objectsContainer.appendChild(empty);
+                } else {
+                    detections.slice(0, 8).forEach((item) => {
+                        const line = document.createElement('p');
+                        line.className = 'text-sm text-gray-700 dark:text-gray-300';
+                        const label = item.label_zh || item.label || '对象';
+                        const confidence = Math.round((Number(item.confidence) || 0) * 100);
+                        line.textContent = `${label} · ${confidence}%`;
+                        objectsContainer.appendChild(line);
+                    });
+                }
+            }
+
+            image.aiTags = tags;
+            image.aiDescription = caption;
+            image.aiAnalyzed = true;
+            image.detections = detections;
+            setStatus(
+                data.provider === 'openai'
+                    ? `真实模型分析完成（${data.model_version || 'vision'}）`
+                    : '演示数据：未配置 AI_API_KEY，配置后自动使用真实模型。'
+            );
+        } catch (error) {
+            setStatus(`分析失败：${error.message}`);
+            setDescription('无法获取 AI 分析结果，请检查后端服务或 API 配置。');
+        } finally {
+            if (button) button.disabled = false;
         }
     }
 
@@ -1021,12 +1550,6 @@ if (document.readyState === 'loading') {
 }
 
 // 导出应用实例和相关类
-export {
-    App,
-    AppStateManager,
-    KeyboardShortcutManager,
-    DragDropManager,
-    PerformanceMonitor
-};
+export { App, AppStateManager, KeyboardShortcutManager, DragDropManager, PerformanceMonitor };
 
 export default app;

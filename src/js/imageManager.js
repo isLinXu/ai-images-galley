@@ -341,14 +341,18 @@ class ImageCacheManager {
                     ctx.drawImage(img, 0, 0, width, height);
 
                     // 转换为Blob URL
-                    canvas.toBlob((blob) => {
-                        if (blob) {
-                            const url = URL.createObjectURL(blob);
-                            resolve(url);
-                        } else {
-                            reject(new Error('缩略图生成失败'));
-                        }
-                    }, 'image/jpeg', this.compressionQuality);
+                    canvas.toBlob(
+                        (blob) => {
+                            if (blob) {
+                                const url = URL.createObjectURL(blob);
+                                resolve(url);
+                            } else {
+                                reject(new Error('缩略图生成失败'));
+                            }
+                        },
+                        'image/jpeg',
+                        this.compressionQuality
+                    );
                 };
 
                 img.onerror = () => reject(new Error('图像加载失败'));
@@ -541,14 +545,18 @@ class ImageProcessor {
                     this.ctx.drawImage(img, 0, 0, width, height);
 
                     // 转换为Blob
-                    this.canvas.toBlob((blob) => {
-                        URL.revokeObjectURL(url);
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('图像压缩失败'));
-                        }
-                    }, format, quality);
+                    this.canvas.toBlob(
+                        (blob) => {
+                            URL.revokeObjectURL(url);
+                            if (blob) {
+                                resolve(blob);
+                            } else {
+                                reject(new Error('图像压缩失败'));
+                            }
+                        },
+                        format,
+                        quality
+                    );
                 } catch (error) {
                     URL.revokeObjectURL(url);
                     reject(error);
@@ -668,13 +676,13 @@ class ImageProcessor {
      */
     _getFilterCSS(filter) {
         const filters = {
-            'grayscale': 'grayscale(100%)',
-            'sepia': 'sepia(100%)',
-            'blur': 'blur(2px)',
-            'brightness': 'brightness(120%)',
-            'contrast': 'contrast(120%)',
-            'saturate': 'saturate(150%)',
-            'vintage': 'sepia(50%) contrast(120%) brightness(110%)'
+            grayscale: 'grayscale(100%)',
+            sepia: 'sepia(100%)',
+            blur: 'blur(2px)',
+            brightness: 'brightness(120%)',
+            contrast: 'contrast(120%)',
+            saturate: 'saturate(150%)',
+            vintage: 'sepia(50%) contrast(120%) brightness(110%)'
         };
 
         return filters[filter] || 'none';
@@ -715,7 +723,6 @@ class ImageManager {
 
             this.isInitialized = true;
             imageLogger.info('ImageManager: 图片管理器初始化完成');
-
         } catch (error) {
             console.error('ImageManager: 初始化失败:', error);
             throw error;
@@ -729,12 +736,7 @@ class ImageManager {
      * @returns {Promise<Object>} 图像对象
      */
     async loadImage(source, options = {}) {
-        const {
-            generateThumbnail = true,
-            extractMetadata = true,
-            useCache = true,
-            priority = 'normal'
-        } = options;
+        const { generateThumbnail = true, extractMetadata = true, useCache = true, priority = 'normal' } = options;
 
         try {
             // 生成缓存键
@@ -770,7 +772,6 @@ class ImageManager {
             this.loadingPromises.delete(cacheKey);
 
             return result;
-
         } catch (error) {
             console.error('图像加载失败:', error);
             throw error;
@@ -822,11 +823,12 @@ class ImageManager {
 
             if (extractMetadata && source instanceof File) {
                 tasks.push(
-                    this.metadataManager.extractMetadata(source)
-                        .then(metadata => {
+                    this.metadataManager
+                        .extractMetadata(source)
+                        .then((metadata) => {
                             imageObj.metadata = metadata;
                         })
-                        .catch(error => {
+                        .catch((error) => {
                             console.warn('元数据提取失败:', error);
                             imageObj.metadata = this.metadataManager._createFallbackMetadata(source);
                         })
@@ -835,12 +837,13 @@ class ImageManager {
 
             if (generateThumbnail) {
                 tasks.push(
-                    this.cacheManager.generateThumbnail(source)
-                        .then(thumbnailUrl => {
+                    this.cacheManager
+                        .generateThumbnail(source)
+                        .then((thumbnailUrl) => {
                             imageObj.thumbnailUrl = thumbnailUrl;
                             this.cacheManager.setThumbnail(cacheKey, thumbnailUrl);
                         })
-                        .catch(error => {
+                        .catch((error) => {
                             console.warn('缩略图生成失败:', error);
                         })
                 );
@@ -858,7 +861,6 @@ class ImageManager {
             });
 
             return imageObj;
-
         } catch (error) {
             imageObj.error = error;
 
@@ -909,10 +911,7 @@ class ImageManager {
      * @returns {Promise<Array>} 图像对象数组
      */
     async loadImages(sources, options = {}) {
-        const {
-            concurrency = CONFIG.IMAGE.CONCURRENT_LOADS,
-            onProgress = null
-        } = options;
+        const { concurrency = CONFIG.IMAGE.CONCURRENT_LOADS, onProgress = null } = options;
 
         const results = [];
         let completed = 0;
@@ -942,7 +941,7 @@ class ImageManager {
             });
 
             const batchResults = await Promise.allSettled(batchPromises);
-            results.push(...batchResults.map(r => r.status === 'fulfilled' ? r.value : null));
+            results.push(...batchResults.map((r) => (r.status === 'fulfilled' ? r.value : null)));
         }
 
         return results.filter(Boolean);
@@ -955,15 +954,24 @@ class ImageManager {
      */
     validateImageFile(file) {
         const errors = [];
+        if (!file) {
+            return { valid: false, errors: ['请选择文件'] };
+        }
 
-        // 检查文件类型
-        if (!this.supportedFormats.includes(file.type)) {
-            errors.push(`不支持的文件格式: ${file.type}`);
+        // MIME 与扩展名双重检查：浏览器给出的 file.type 可能是空字符串
+        const extension = (file.name.split('.').pop() || '').toLowerCase();
+        if (!this.supportedFormats.includes(extension)) {
+            errors.push(`不支持的文件格式: ${file.name}`);
+        }
+        if (file.type && !file.type.startsWith('image/')) {
+            errors.push(`文件 MIME 类型不是图片: ${file.type}`);
         }
 
         // 检查文件大小
         if (file.size > CONFIG.IMAGE.MAX_FILE_SIZE) {
-            errors.push(`文件过大: ${FileUtils.formatSize(file.size)} > ${FileUtils.formatSize(CONFIG.IMAGE.MAX_FILE_SIZE)}`);
+            errors.push(
+                `文件过大: ${FileUtils.formatSize(file.size)} > ${FileUtils.formatSize(CONFIG.IMAGE.MAX_FILE_SIZE)}`
+            );
         }
 
         if (file.size === 0) {
@@ -1083,8 +1091,7 @@ class ImageManager {
      */
     _cleanupMemory() {
         // 清理最旧的50%图像
-        const images = Array.from(this.loadedImages.entries())
-            .sort((a, b) => a[1].loadedAt - b[1].loadedAt);
+        const images = Array.from(this.loadedImages.entries()).sort((a, b) => a[1].loadedAt - b[1].loadedAt);
 
         const toRemove = images.slice(0, Math.floor(images.length * 0.5));
 
@@ -1102,11 +1109,6 @@ class ImageManager {
 // 创建全局图像管理器实例
 const imageManager = new ImageManager();
 
-export {
-    ImageMetadataManager,
-    ImageCacheManager,
-    ImageProcessor,
-    ImageManager
-};
+export { ImageMetadataManager, ImageCacheManager, ImageProcessor, ImageManager };
 
 export default imageManager;

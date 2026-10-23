@@ -1,330 +1,101 @@
-# AI智能相册系统 - 模块化架构
+# 模块化版本（实验性）
 
-## 项目概述
+`index-modular.html` 是对经典单页应用的模块化重构。当前状态：
 
-这是一个基于现代Web技术构建的AI智能相册系统，采用模块化架构设计，具有图片管理、AI分析、智能搜索等功能。
+- ✅ 启动、图片列表、搜索、排序、分页、网格/列表/瀑布流切换
+- ✅ 图片详情模态框、主题切换、管理员登录表单
+- ✅ 图片源降级：GitHub Contents API → `images/manifest.json` → 目录索引
+- ✅ 管理员登录后通过 GitHub Contents API 持久化上传（浏览器端压缩为 JPEG）
+- ✅ AI 分析标签页：调用后端视觉模型（需启动后端并配置 API 地址）
+- ⏸ Prompt/多模态 UI 尚未接入
+- ⏸ 默认不请求后端；未配置时 AI 标签页只显示配置提示
 
-## 架构特点
+> 生产使用请优先选择 `index.html`。模块化版用于验证架构和逐步迁移。
 
-### 🏗️ 模块化设计
-- **完全模块化**: 将原来的单文件应用拆分为多个独立模块
-- **松耦合**: 模块间通过事件系统和接口通信
-- **高内聚**: 每个模块职责单一，功能完整
-- **易维护**: 代码结构清晰，便于开发和维护
+## 运行
 
-### 📁 项目结构
-
-```
-ai-images-gallery-v1/
-├── index.html                 # 原始单文件版本
-├── index-modular.html         # 新的模块化版本
-├── README-modular.md          # 模块化架构说明
-└── src/
-    ├── styles/
-    │   └── main.css           # 主样式文件
-    └── js/
-        ├── config.js          # 系统配置和常量
-        ├── utils.js           # 工具函数库
-        ├── eventManager.js    # 事件管理系统
-        ├── storageManager.js  # 存储管理器
-        ├── uiManager.js       # UI管理器
-        ├── imageManager.js    # 图片管理器
-        ├── aiEngine.js        # AI分析引擎
-        ├── galleryManager.js  # 图片库管理器
-        ├── adminManager.js    # 管理员功能
-        └── app.js             # 主应用程序入口
+```bash
+python3 -m http.server 8080
+# 打开 http://localhost:8080/index-modular.html
 ```
 
-## 核心模块说明
+## 模块结构
 
-### 1. 配置模块 (config.js)
-- 系统配置和常量定义
-- 安全设置、AI模型配置
-- UI配置、存储配置
-- 主题和本地化设置
+```
+src/js/
+├── app.js               # 应用入口、生命周期、UI 绑定
+├── config.js            # 全局配置（唯一配置源）
+├── utils.js             # 工具函数（含 GitHub Token 校验、哈希）
+├── logger.js            # 日志命名空间
+├── eventManager.js      # 发布-订阅事件总线
+├── storageManager.js    # localStorage/sessionStorage/内存适配器
+├── imageSource.js       # 图片来源：GitHub API / manifest / 目录索引
+├── uploader.js          # 模块化版上传：压缩、sha 覆盖、GitHub Contents API
+├── imageManager.js      # 图片加载、元数据、缩略图、内存缓存
+├── galleryManager.js    # 搜索、过滤、排序、分页、视图
+├── galleryRenderer.js   # 网格/列表/瀑布流 DOM 渲染
+├── aiEngine.js          # TensorFlow.js 分析引擎（默认关闭）
+├── adminManager.js      # GitHub Token 登录、权限、日志
+├── apiClient.js         # FastAPI 客户端（可选）
+├── promptEngine.js      # Prompt 规则引擎（本地降级）
+├── multimodalEngine.js  # 多模态客户端（未接入 UI）
+└── imageWorker.js       # 图像处理 Worker（已修复脚本语法，暂未启用）
+```
 
-### 2. 工具函数库 (utils.js)
-- **TimeUtils**: 时间和日期处理
-- **ValidationUtils**: 输入验证
-- **StringUtils**: 字符串操作
-- **ArrayUtils**: 数组操作
-- **ObjectUtils**: 对象操作
-- **FileUtils**: 文件处理
-- **DOMUtils**: DOM操作
-- **AsyncUtils**: 异步操作
-- **MathUtils**: 数学计算
+## 数据流
 
-### 3. 事件管理系统 (eventManager.js)
-- 发布-订阅模式实现
-- 类型安全的事件系统
-- 模块间通信桥梁
-- 事件生命周期管理
+1. `app.initialize()` → `galleryManager.refreshGallery()`
+2. `imageSource.loadImages()`
+   - GitHub Contents API 获取最新文件名/大小
+   - 并行读取 `images/manifest.json`，补齐 Git 提交时间
+   - API 失败时回退清单，再失败回退目录索引
+3. `galleryManager` 过滤/排序/分页 → 发 `gallery:display-updated`
+4. `galleryRenderer` 渲染 → 发 `gallery:rendered`
+5. `app` 触发 `LazyLoader.observeAll()`，并同步分页/计数 UI
+6. 上传：`uploader.uploadFiles()` → 压缩 → GitHub Contents API → `imageSource.invalidate()` → 重新拉取
+7. AI：详情页标签页 → `analysisAPI.analyzeUrl()` → 后端视觉模型（或 mock）→ 更新标签/描述/检测对象
 
-### 4. 存储管理器 (storageManager.js)
-- 多种存储适配器支持
-- 数据缓存和清理
-- 专门化存储管理
-- 存储事件通知
+## 后端联调
 
-### 5. UI管理器 (uiManager.js)
-- **ModalManager**: 模态框管理
-- **TooltipManager**: 提示消息
-- **ProgressManager**: 进度条
-- **LoadingManager**: 加载状态
-- **ThemeManager**: 主题切换
-- **ResponsiveManager**: 响应式设计
+默认 `CONFIG.API.ENABLED=false`，不会发送任何后端请求。启用方式：
 
-### 6. 图片管理器 (imageManager.js)
-- **ImageMetadataManager**: 元数据提取
-- **ImageCacheManager**: 图片缓存
-- **ImageProcessor**: 图片处理
-- 图片加载、验证、删除
-- 内存管理和优化
+```js
+localStorage.setItem('api_base_url', 'http://localhost:8000/api/v1');
+location.reload();
+```
 
-### 7. AI分析引擎 (aiEngine.js)
-- **TensorFlowModelManager**: 模型管理
-- **EnhancedAIEngine**: AI分析
-- 图片分类和对象检测
-- 智能标签生成
-- 结果缓存和优化
+启用后 `apiClient` 会做健康检查并加载 Prompt 模板。注意 `index-modular.html` 的 CSP 已允许
+`http://localhost:8000` 与 `https://api.github.com`。
 
-### 8. 图片库管理器 (galleryManager.js)
-- **SearchEngine**: 智能搜索
-- **FilterManager**: 过滤器
-- **SortManager**: 排序功能
-- **PaginationManager**: 分页
-- **ViewManager**: 视图模式
+## AI 分析模式
 
-### 9. 管理员功能 (adminManager.js)
-- **SecurityManager**: 安全管理
-- **ActivityLogManager**: 活动日志
-- **PermissionManager**: 权限管理
-- **SessionManager**: 会话管理
+模块化版不再加载 TensorFlow.js（避免模型体积与 CSP `unsafe-eval` 问题），AI 分析通过
+后端 `POST /api/v1/analysis/url` 完成：
 
-### 10. 主应用程序 (app.js)
-- **AppStateManager**: 应用状态管理
-- **KeyboardShortcutManager**: 快捷键
-- **DragDropManager**: 拖拽上传
-- **PerformanceMonitor**: 性能监控
-- 应用生命周期管理
-
-## 技术特性
-
-### 🎯 核心功能
-- ✅ 图片上传和管理
-- ✅ AI智能分析（分类、对象检测）
-- ✅ 智能搜索和过滤
-- ✅ 多种视图模式
-- ✅ 自定义标签和笔记
-- ✅ 管理员功能
-- ✅ 主题切换
-- ✅ 响应式设计
-
-### 🚀 性能优化
-- **懒加载**: 图片和模块按需加载
-- **缓存策略**: 多层缓存机制
-- **内存管理**: 自动内存清理
-- **性能监控**: 实时性能指标
-- **代码分割**: 模块化加载
-
-### 🔒 安全特性
-- **输入验证**: 严格的输入验证
-- **XSS防护**: HTML转义和清理
-- **CSRF保护**: 请求验证
-- **权限控制**: 基于角色的访问控制
-- **会话管理**: 安全的会话处理
-
-### 📱 用户体验
-- **响应式设计**: 适配各种设备
-- **无障碍支持**: ARIA标签和键盘导航
-- **国际化**: 多语言支持框架
-- **离线支持**: Service Worker缓存
-- **快捷键**: 丰富的键盘快捷键
-
-## 使用方法
-
-### 开发环境
-
-1. **启动开发服务器**:
-   ```bash
-   # 使用Python
-   python3 -m http.server 8000
-   
-   # 或使用Node.js
-   npx serve .
+1. 启动 `backend/`，可选配置 `OPENAI_API_KEY`（无 Key 时后端返回 mock，`provider` 字段区分）；
+2. 在浏览器控制台设置：
+   ```js
+   localStorage.setItem('api_base_url', 'http://localhost:8000/api/v1');
+   location.reload();
    ```
+3. 打开图片详情 → AI 分析 → 自动调用后端并显示标签、描述、检测对象。
 
-2. **访问应用**:
-   - 模块化版本: `http://localhost:8000/index-modular.html`
-   - 原始版本: `http://localhost:8000/index.html`
+URL 分析只允许配置中的 `ALLOWED_IMAGE_HOSTS`；如果前端部署在其他域名，需要在
+`backend/.env` 中追加对应主机。
 
-### 生产部署
+## 已知缺口
 
-1. **构建优化** (可选):
-   ```bash
-   # 压缩CSS和JS文件
-   # 优化图片资源
-   # 启用Gzip压缩
-   ```
+- AI 结果目前只展示在详情模态框，尚未写入卡片层。
+- Prompt/多模态引擎没有对应 UI。
+- `imageWorker.js` 未接入图片管线。
+- 后端风格迁移/图像编辑仍是 mock；图像分析/Prompt/多模态在配置 Key 后为真实模型。
+- 新上传图片不会自动生成 WebP 缩略图，需要运行 `npm run generate:thumbnails`。
 
-2. **部署到Web服务器**:
-   - 上传所有文件到服务器
-   - 配置HTTPS
-   - 设置缓存策略
+## 已知修复记录
 
-## 开发指南
-
-### 添加新功能
-
-1. **创建新模块**:
-   ```javascript
-   // src/js/newFeature.js
-   class NewFeatureManager {
-       constructor() {
-           this.initialize();
-       }
-       
-       async initialize() {
-           // 初始化逻辑
-       }
-   }
-   
-   export default new NewFeatureManager();
-   ```
-
-2. **注册事件**:
-   ```javascript
-   import eventManager from './eventManager.js';
-   
-   eventManager.on('custom:event', (data) => {
-       // 处理事件
-   });
-   ```
-
-3. **更新主应用**:
-   ```javascript
-   // 在app.js中导入和初始化新模块
-   import newFeature from './newFeature.js';
-   ```
-
-### 自定义配置
-
-修改 `src/js/config.js` 文件来调整系统配置:
-
-```javascript
-export const CONFIG = {
-    // 修改AI模型设置
-    AI_MODELS: {
-        MOBILENET_URL: 'your-model-url',
-        CONFIDENCE_THRESHOLD: 0.3
-    },
-    
-    // 修改安全设置
-    SECURITY: {
-        MAX_LOGIN_ATTEMPTS: 5,
-        LOGIN_COOLDOWN: 300000
-    }
-};
-```
-
-### 扩展UI组件
-
-在 `src/js/uiManager.js` 中添加新的UI组件:
-
-```javascript
-class CustomComponentManager {
-    constructor() {
-        this.components = new Map();
-    }
-    
-    createComponent(type, options) {
-        // 创建自定义组件
-    }
-}
-```
-
-## 性能监控
-
-系统内置性能监控功能，可以通过以下方式查看:
-
-```javascript
-// 获取性能报告
-const report = app.getPerformanceReport();
-console.log('性能报告:', report);
-
-// 监听性能事件
-eventManager.on('performance:metric-recorded', (data) => {
-    console.log('性能指标:', data);
-});
-```
-
-## 故障排除
-
-### 常见问题
-
-1. **模块加载失败**:
-   - 检查文件路径是否正确
-   - 确保服务器支持ES6模块
-   - 查看浏览器控制台错误信息
-
-2. **AI分析不工作**:
-   - 检查TensorFlow.js是否正确加载
-   - 确认网络连接正常
-   - 查看模型加载状态
-
-3. **存储问题**:
-   - 检查浏览器存储配额
-   - 清除浏览器缓存
-   - 确认localStorage可用
-
-### 调试工具
-
-```javascript
-// 启用调试模式
-app.setState('debugMode', true);
-
-// 查看应用状态
-console.log('应用状态:', app.getState());
-
-// 查看事件历史
-console.log('事件历史:', eventManager.getEventHistory());
-```
-
-## 贡献指南
-
-1. **代码规范**:
-   - 使用ES6+语法
-   - 遵循JSDoc注释规范
-   - 保持代码简洁和可读性
-
-2. **提交规范**:
-   - 使用语义化提交信息
-   - 包含详细的变更说明
-   - 添加相关测试
-
-3. **模块设计原则**:
-   - 单一职责原则
-   - 开闭原则
-   - 依赖倒置原则
-   - 接口隔离原则
-
-## 许可证
-
-MIT License - 详见LICENSE文件
-
-## 更新日志
-
-### v2.0.0 (模块化重构)
-- ✨ 完全模块化架构重构
-- 🚀 性能优化和内存管理
-- 🔒 增强安全特性
-- 📱 改进用户体验
-- 🛠️ 开发工具和调试支持
-- 📚 完善文档和示例
-
-### v1.0.0 (初始版本)
-- 🎯 基础图片管理功能
-- 🤖 AI智能分析
-- 🔍 搜索和过滤
-- 👨‍💼 管理员功能
-- 🎨 响应式UI设计
+- 修复 `storageManager.specializedStorage` 未挂载、`userPreferences`/`adminData` 访问器缺失。
+- 补齐 `CONFIG.SEARCH/GITHUB/ADMIN/UI/IMAGE` 配置，修复 `ResponsiveManager`、`ActivityLogManager` 初始化崩溃。
+- 修复 `galleryRenderer` 未监听 `gallery:display-updated`、分页空结果、空搜索显示全部图片。
+- 修复 GitHub Token 校验方法名、`StringUtils.hash`、`emitImageLoading`、`ModalManager.closeAll` 等缺失 API。
+- 将 Tailwind/Font Awesome 本地化，避免 CDN/SRI 漂移；PWA 资源与 WebP 缩略图已补齐。
+- 接入 GitHub 持久化上传，并复用管理员 Token（sessionStorage）。

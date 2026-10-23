@@ -1,0 +1,11 @@
+# 历史单页文件体积大、内含大量内联脚本，保持原样
+index.html
+# 生成/第三方资源
+vendor/
+node_modules/
+dist/
+images/
+assets/
+*.png
+*.jpg
+*.jpeg

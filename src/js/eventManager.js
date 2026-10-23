@@ -50,7 +50,7 @@ class EventManager {
         };
 
         // 按优先级插入
-        const insertIndex = listeners.findIndex(l => l.priority < listenerWrapper.priority);
+        const insertIndex = listeners.findIndex((l) => l.priority < listenerWrapper.priority);
         if (insertIndex === -1) {
             listeners.push(listenerWrapper);
         } else {
@@ -91,10 +91,10 @@ class EventManager {
 
         if (typeof listenerOrId === 'string') {
             // 通过ID查找
-            index = listeners.findIndex(l => l.id === listenerOrId);
+            index = listeners.findIndex((l) => l.id === listenerOrId);
         } else if (typeof listenerOrId === 'function') {
             // 通过函数引用查找
-            index = listeners.findIndex(l => l.listener === listenerOrId);
+            index = listeners.findIndex((l) => l.listener === listenerOrId);
         }
 
         if (index !== -1) {
@@ -286,20 +286,13 @@ class EventManager {
         const prefixEvent = (eventName) => `${namespace}:${eventName}`;
 
         return {
-            on: (eventName, listener, options) =>
-                this.on(prefixEvent(eventName), listener, options),
-            once: (eventName, listener, options) =>
-                this.once(prefixEvent(eventName), listener, options),
-            off: (eventName, listenerOrId) =>
-                this.off(prefixEvent(eventName), listenerOrId),
-            emit: (eventName, ...args) =>
-                this.emit(prefixEvent(eventName), ...args),
-            emitAsync: (eventName, ...args) =>
-                this.emitAsync(prefixEvent(eventName), ...args),
-            waitFor: (eventName, timeout) =>
-                this.waitFor(prefixEvent(eventName), timeout),
-            listenerCount: (eventName) =>
-                this.listenerCount(prefixEvent(eventName))
+            on: (eventName, listener, options) => this.on(prefixEvent(eventName), listener, options),
+            once: (eventName, listener, options) => this.once(prefixEvent(eventName), listener, options),
+            off: (eventName, listenerOrId) => this.off(prefixEvent(eventName), listenerOrId),
+            emit: (eventName, ...args) => this.emit(prefixEvent(eventName), ...args),
+            emitAsync: (eventName, ...args) => this.emitAsync(prefixEvent(eventName), ...args),
+            waitFor: (eventName, timeout) => this.waitFor(prefixEvent(eventName), timeout),
+            listenerCount: (eventName) => this.listenerCount(prefixEvent(eventName))
         };
     }
 
@@ -327,7 +320,7 @@ class EventManager {
             info.totalListeners += listeners.length;
             info.events[eventName] = {
                 listenerCount: listeners.length,
-                listeners: listeners.map(l => ({
+                listeners: listeners.map((l) => ({
                     id: l.id,
                     priority: l.priority,
                     once: l.once,
@@ -347,6 +340,14 @@ class TypedEventManager extends EventManager {
     constructor() {
         super();
         this.types = EVENT_TYPES;
+    }
+
+    /**
+     * 触发图片开始加载事件
+     * @param {Object} imageData - 图片数据
+     */
+    emitImageLoading(imageData) {
+        this.emit(this.types.IMAGE_LOADING, imageData);
     }
 
     /**
@@ -409,6 +410,15 @@ class TypedEventManager extends EventManager {
      */
     emitThemeChanged(themeData) {
         this.emit(this.types.THEME_CHANGED, themeData);
+    }
+
+    /**
+     * 监听图片开始加载事件
+     * @param {Function} listener - 监听器函数
+     * @param {Object} options - 选项
+     */
+    onImageLoading(listener, options) {
+        return this.on(this.types.IMAGE_LOADING, listener, options);
     }
 
     /**

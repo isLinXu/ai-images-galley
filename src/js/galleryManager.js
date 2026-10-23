@@ -4,10 +4,10 @@
  */
 
 import { CONFIG } from './config.js';
-import {  } from './utils.js';
 import eventManager from './eventManager.js';
 import storageManager from './storageManager.js';
 import imageManager from './imageManager.js';
+import imageSource from './imageSource.js';
 import uiManager from './uiManager.js';
 import { galleryLogger } from './logger.js';
 
@@ -42,14 +42,14 @@ class SearchEngine {
         this._addToHistory(query);
 
         // 计算每个图片的搜索分数
-        const scoredImages = images.map(image => ({
+        const scoredImages = images.map((image) => ({
             ...image,
             searchScore: this._calculateSearchScore(image, searchTerms, options)
         }));
 
         // 过滤和排序
         const filteredImages = scoredImages
-            .filter(image => image.searchScore > 0)
+            .filter((image) => image.searchScore > 0)
             .sort((a, b) => b.searchScore - a.searchScore);
 
         // 触发搜索事件
@@ -75,27 +75,27 @@ class SearchEngine {
         let score = 0;
         const weights = { ...this.searchWeights, ...options.weights };
 
-        searchTerms.forEach(term => {
+        searchTerms.forEach((term) => {
             // 文件名匹配
             if (image.name && image.name.toLowerCase().includes(term)) {
                 score += weights.filename;
             }
 
-            // AI标签匹配
+            // AI标签匹配（兼容字符串与 { label, confidence } 两种形态）
             if (image.aiTags) {
-                const tagMatches = image.aiTags.filter(tag =>
-                    tag.label.toLowerCase().includes(term)
-                );
-                tagMatches.forEach(tag => {
-                    score += weights.aiTags * tag.confidence;
+                const tagMatches = image.aiTags.filter((tag) => {
+                    const label = typeof tag === 'string' ? tag : tag.label || '';
+                    return label.toLowerCase().includes(term);
+                });
+                tagMatches.forEach((tag) => {
+                    const confidence = typeof tag === 'string' ? 1 : tag.confidence || 0;
+                    score += weights.aiTags * confidence;
                 });
             }
 
             // 自定义标签匹配
             if (image.customTags) {
-                const customTagMatches = image.customTags.filter(tag =>
-                    tag.toLowerCase().includes(term)
-                );
+                const customTagMatches = image.customTags.filter((tag) => tag.toLowerCase().includes(term));
                 score += customTagMatches.length * weights.customTags;
             }
 
@@ -140,15 +140,15 @@ class SearchEngine {
     _extractSearchTerms(query) {
         // 支持引号包围的短语搜索
         const phrases = query.match(/"([^"]+)"/g) || [];
-        const phrasesContent = phrases.map(phrase => phrase.slice(1, -1));
+        const phrasesContent = phrases.map((phrase) => phrase.slice(1, -1));
 
         // 移除引号短语后的剩余词汇
         let remainingQuery = query;
-        phrases.forEach(phrase => {
+        phrases.forEach((phrase) => {
             remainingQuery = remainingQuery.replace(phrase, '');
         });
 
-        const words = remainingQuery.split(/\s+/).filter(word => word.length > 0);
+        const words = remainingQuery.split(/\s+/).filter((word) => word.length > 0);
 
         return [...phrasesContent, ...words];
     }
@@ -163,7 +163,7 @@ class SearchEngine {
         if (!trimmedQuery) return;
 
         // 移除重复项
-        this.searchHistory = this.searchHistory.filter(item => item.query !== trimmedQuery);
+        this.searchHistory = this.searchHistory.filter((item) => item.query !== trimmedQuery);
 
         // 添加到开头
         this.searchHistory.unshift({
@@ -187,15 +187,15 @@ class SearchEngine {
      */
     getSuggestions(partial) {
         if (!partial || partial.length < 2) {
-            return this.searchHistory.slice(0, 5).map(item => item.query);
+            return this.searchHistory.slice(0, 5).map((item) => item.query);
         }
 
         const normalizedPartial = partial.toLowerCase();
 
         return this.searchHistory
-            .filter(item => item.query.toLowerCase().includes(normalizedPartial))
+            .filter((item) => item.query.toLowerCase().includes(normalizedPartial))
             .slice(0, 5)
-            .map(item => item.query);
+            .map((item) => item.query);
     }
 
     /**
@@ -299,7 +299,7 @@ class FilterManager {
             return images;
         }
 
-        return images.filter(image => {
+        return images.filter((image) => {
             return Array.from(this.activeFilters.entries()).every(([filterType, value]) => {
                 return this._applyFilter(image, filterType, value);
             });
@@ -474,8 +474,7 @@ class FilterManager {
         if (orientation === 'all') return true;
 
         const { width, height } = image;
-        const imageOrientation = width > height ? 'landscape' :
-            width < height ? 'portrait' : 'square';
+        const imageOrientation = width > height ? 'landscape' : width < height ? 'portrait' : 'square';
 
         return imageOrientation === orientation;
     }
@@ -501,7 +500,7 @@ class FilterManager {
         let totalConfidence = 0;
         let confidenceCount = 0;
 
-        images.forEach(image => {
+        images.forEach((image) => {
             // 文件类型统计
             const fileType = image.type || 'unknown';
             stats.fileTypes[fileType] = (stats.fileTypes[fileType] || 0) + 1;
@@ -1057,7 +1056,7 @@ class GalleryManager {
         this.viewManager = new ViewManager();
 
         this.images = [];
-        this.filteredImages = [];
+        this.filteredImages = null;
         this.displayedImages = [];
 
         this.isLoading = false;
@@ -1065,15 +1064,15 @@ class GalleryManager {
         this.isInitialized = false;
 
         this._bindEvents();
-        this._initializeGallery();
     }
 
     /**
      * 刷新图片库
-     * @param {boolean} force - 是否强制刷新
+     * @param {Object|boolean} options - 刷新选项；兼容旧版传入 boolean
      */
     async refreshGallery(options = {}) {
-        const { force = false, showLoading = true } = options;
+        const { force = false, showLoading = true } =
+            typeof options === 'boolean' ? { force: options, showLoading: true } : options;
 
         if (this.isLoading && !force) {
             return;
@@ -1086,7 +1085,17 @@ class GalleryManager {
                 uiManager.loadingManager.show('正在加载图片库...');
             }
 
-            this.images = await imageManager.getAllImages();
+            const [sourceImages, cachedLocalImages] = await Promise.all([
+                imageSource.loadImages({ force }).catch((error) => {
+                    galleryLogger.warn('图片来源加载失败:', error.message);
+                    return [];
+                }),
+                imageManager.getAllImages().catch(() => [])
+            ]);
+
+            const localImages = cachedLocalImages.map((image) => this._mapLocalImage(image));
+            this.images = this._mergeImages(sourceImages, localImages);
+            this.filteredImages = null;
 
             this._updateDisplayedImages();
 
@@ -1097,7 +1106,6 @@ class GalleryManager {
                 displayedImages: this.displayedImages.length,
                 timestamp: this.lastRefreshTime
             });
-
         } catch (error) {
             console.error('刷新图片库失败:', error);
             if (showLoading) {
@@ -1109,6 +1117,47 @@ class GalleryManager {
                 uiManager.loadingManager.hide();
             }
         }
+    }
+
+    /**
+     * 把 ImageManager 的内部图片对象映射为画廊数据
+     * @param {Object} image - ImageManager 图片对象
+     * @returns {Object}
+     * @private
+     */
+    _mapLocalImage(image) {
+        const fileName = image.metadata?.fileName || image.source?.name || '本地图片';
+        return {
+            id: image.id || image.cacheKey || fileName,
+            name: fileName,
+            url: image.url,
+            type: fileName.split('.').pop().toLowerCase() === 'jpeg' ? 'jpg' : fileName.split('.').pop().toLowerCase(),
+            thumbnailUrl: image.thumbnailUrl || image.url,
+            size: image.metadata?.fileSize || image.source?.size || 0,
+            width: image.metadata?.basic?.width || 0,
+            height: image.metadata?.basic?.height || 0,
+            timestamp: image.loadedAt ? new Date(image.loadedAt).getTime() : Date.now(),
+            uploadTime: image.loadedAt ? new Date(image.loadedAt).getTime() : Date.now(),
+            loadMethod: '本地上传',
+            aiTags: [],
+            customTags: []
+        };
+    }
+
+    /**
+     * 合并远端与本地图片，并按 URL 去重
+     * @param {Array} sourceImages - 远端图片
+     * @param {Array} localImages - 本地图片
+     * @returns {Array}
+     * @private
+     */
+    _mergeImages(sourceImages, localImages) {
+        const seen = new Set();
+        return [...localImages, ...sourceImages].filter((image) => {
+            if (!image || !image.url || seen.has(image.url)) return false;
+            seen.add(image.url);
+            return true;
+        });
     }
 
     /**
@@ -1134,9 +1183,10 @@ class GalleryManager {
      */
     applyFilters() {
         // 如果有搜索查询，先应用搜索
-        const baseImages = this.searchEngine.searchHistory.length > 0 ?
-            this.searchEngine.search(this.searchEngine.searchHistory[0]?.query || '', this.images) :
-            this.images;
+        const baseImages =
+            this.searchEngine.searchHistory.length > 0
+                ? this.searchEngine.search(this.searchEngine.searchHistory[0]?.query || '', this.images)
+                : this.images;
 
         this.filteredImages = this.filterManager.applyFilters(baseImages);
 
@@ -1181,7 +1231,7 @@ class GalleryManager {
      * @param {string} imageId - 图片ID
      */
     removeImage(imageId) {
-        const index = this.images.findIndex(img => img.id === imageId);
+        const index = this.images.findIndex((img) => img.id === imageId);
         if (index > -1) {
             const removedImage = this.images.splice(index, 1)[0];
             this._updateDisplayedImages();
@@ -1200,7 +1250,7 @@ class GalleryManager {
      * @param {Object} updates - 更新数据
      */
     updateImage(imageId, updates) {
-        const index = this.images.findIndex(img => img.id === imageId);
+        const index = this.images.findIndex((img) => img.id === imageId);
         if (index > -1) {
             this.images[index] = { ...this.images[index], ...updates };
             this._updateDisplayedImages();
@@ -1219,7 +1269,7 @@ class GalleryManager {
      * @returns {Object|null} 图片对象
      */
     getImage(imageId) {
-        return this.images.find(img => img.id === imageId) || null;
+        return this.images.find((img) => img.id === imageId) || null;
     }
 
     /**
@@ -1303,7 +1353,7 @@ class GalleryManager {
      */
     _updateDisplayedImages() {
         // 如果没有过滤后的图片，使用所有图片
-        let workingImages = this.filteredImages.length > 0 ? this.filteredImages : this.images;
+        let workingImages = this.filteredImages !== null ? this.filteredImages : this.images;
 
         // 应用排序
         workingImages = this.sortManager.applySort(workingImages);
@@ -1316,6 +1366,8 @@ class GalleryManager {
             displayedImages: this.displayedImages,
             totalFiltered: workingImages.length,
             paginationInfo: this.paginationManager.getPaginationInfo(),
+            viewMode: this.viewManager.getCurrentView(),
+            gridColumns: this.viewManager.getGridColumns(),
             timestamp: Date.now()
         });
     }
@@ -1392,18 +1444,11 @@ class GalleryManager {
 
         // 监听视图变化
         eventManager.on('gallery:view-changed', () => {
-            // 视图变化可能需要重新渲染
-            eventManager.emit('gallery:render-required', {
-                viewMode: this.viewManager.currentView,
-                timestamp: Date.now()
-            });
+            this._updateDisplayedImages();
         });
 
         eventManager.on('gallery:grid-columns-changed', () => {
-            eventManager.emit('gallery:render-required', {
-                gridColumns: this.viewManager.gridColumns,
-                timestamp: Date.now()
-            });
+            this._updateDisplayedImages();
         });
     }
 }
@@ -1411,13 +1456,6 @@ class GalleryManager {
 // 创建全局图片库管理器实例
 const galleryManager = new GalleryManager();
 
-export {
-    SearchEngine,
-    FilterManager,
-    SortManager,
-    PaginationManager,
-    ViewManager,
-    GalleryManager
-};
+export { SearchEngine, FilterManager, SortManager, PaginationManager, ViewManager, GalleryManager };
 
 export default galleryManager;

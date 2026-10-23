@@ -1,22 +1,31 @@
 {
   "name": "ai-images-galley",
-  "version": "1.0.0",
-  "description": "基于AI的智能图片管理和分析系统",
+  "version": "1.3.0",
+  "private": true,
+  "description": "基于 TensorFlow.js 与 GitHub 存储的 AI 智能相册",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "esbuild src/js/app.js --bundle --outfile=dist/bundle.js --format=esm",
     "build:watch": "esbuild src/js/app.js --bundle --outfile=dist/bundle.js --format=esm --watch",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "format": "prettier --write \"src/**/*.{js,css,html}\" \"*.html\" \"*.md\"",
-    "format:check": "prettier --check \"src/**/*.{js,css,html}\" \"*.html\" \"*.md\"",
+    "format": "prettier --write \"src/**/*.{js,css,html}\" \"tests/**/*.js\" \"playwright.config.js\" \"*.html\" \"*.md\"",
+    "format:check": "prettier --check \"src/**/*.{js,css,html}\" \"tests/**/*.js\" \"playwright.config.js\" \"*.html\" \"*.md\"",
+    "check:assets": "node scripts/check-assets.mjs",
+    "serve": "node scripts/static-server.mjs",
+    "test:backend": "cd backend && pytest -q",
+    "verify": "npm run lint && npm run format:check && npm run check:assets && npm run build",
     "dev": "npm run build && npm run format",
-    "verify": "npm run lint && npm run format:check && npm run build"
-  },
-  "dependencies": {
-    "esbuild": "^0.25.6"
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "generate:thumbnails": "python3 scripts/generate-thumbnails.py"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "esbuild": "^0.25.6",
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
     "prettier": "^3.2.0"

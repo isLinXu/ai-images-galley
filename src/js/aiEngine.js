@@ -22,8 +22,6 @@ class TensorFlowModelManager {
         this.maxRetries = CONFIG.GITHUB.RETRY_COUNT;
     }
 
-
-
     /**
      * 加载所有模型
      * @returns {Promise<boolean>} 是否成功加载
@@ -37,12 +35,12 @@ class TensorFlowModelManager {
 
             // 并行加载模型
             const [mobileNetSuccess, cocoSsdSuccess] = await Promise.all([
-                this._loadMobileNet().then(success => {
+                this._loadMobileNet().then((success) => {
                     this.loadingProgress += 50;
                     eventManager.emit('ai:model-progress', { progress: this.loadingProgress });
                     return success;
                 }),
-                this._loadCocoSsd().then(success => {
+                this._loadCocoSsd().then((success) => {
                     this.loadingProgress += 50;
                     eventManager.emit('ai:model-progress', { progress: this.loadingProgress });
                     return success;
@@ -74,7 +72,7 @@ class TensorFlowModelManager {
             if (this.retryCount < this.maxRetries) {
                 this.retryCount++;
                 aiLogger.info(`正在重试加载模型 (${this.retryCount}/${this.maxRetries})...`);
-                await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+                await new Promise((resolve) => setTimeout(resolve, 2000)); // 等待2秒
                 return this.loadModels();
             }
 
@@ -114,7 +112,6 @@ class TensorFlowModelManager {
             });
 
             return true;
-
         } catch (error) {
             console.error('AI模型加载失败:', error);
 
@@ -222,7 +219,7 @@ class TensorFlowModelManager {
 
         try {
             const predictions = await this.models.mobilenet.classify(imageElement, 5);
-            return predictions.map(pred => ({
+            return predictions.map((pred) => ({
                 label: pred.className,
                 confidence: pred.probability,
                 category: 'classification',
@@ -246,7 +243,7 @@ class TensorFlowModelManager {
 
         try {
             const predictions = await this.models.cocoSsd.detect(imageElement, 10);
-            return predictions.map(pred => ({
+            return predictions.map((pred) => ({
                 label: pred.class,
                 confidence: pred.score,
                 category: 'detection',
@@ -331,10 +328,7 @@ class EnhancedAIEngine {
                 return false;
             }
 
-            const success = await Promise.race([
-                this.tensorflowManager.loadModels(),
-                timeoutPromise
-            ]);
+            const success = await Promise.race([this.tensorflowManager.loadModels(), timeoutPromise]);
 
             if (success) {
                 aiLogger.info('✅ AI引擎初始化成功');
@@ -406,7 +400,7 @@ class EnhancedAIEngine {
         try {
             // 并行处理多个任务
             const tasks = this.analysisQueue.splice(0, this.workers);
-            const promises = tasks.map(task => this._processTask(task));
+            const promises = tasks.map((task) => this._processTask(task));
 
             await Promise.allSettled(promises);
 
@@ -459,7 +453,6 @@ class EnhancedAIEngine {
             });
 
             resolve(processedResult);
-
         } catch (error) {
             console.error('图像分析失败:', error);
 
@@ -493,11 +486,12 @@ class EnhancedAIEngine {
 
         if (this.tensorflowManager.models.mobilenet) {
             tasks.push(
-                this.tensorflowManager.classifyImage(imageElement)
-                    .then(classifications => {
+                this.tensorflowManager
+                    .classifyImage(imageElement)
+                    .then((classifications) => {
                         results.classifications = classifications;
                     })
-                    .catch(error => {
+                    .catch((error) => {
                         console.warn('图像分类失败:', error);
                     })
             );
@@ -505,11 +499,12 @@ class EnhancedAIEngine {
 
         if (this.tensorflowManager.models.cocoSsd) {
             tasks.push(
-                this.tensorflowManager.detectObjects(imageElement)
-                    .then(detections => {
+                this.tensorflowManager
+                    .detectObjects(imageElement)
+                    .then((detections) => {
                         results.detections = detections;
                     })
-                    .catch(error => {
+                    .catch((error) => {
                         console.warn('物体检测失败:', error);
                     })
             );
@@ -530,21 +525,14 @@ class EnhancedAIEngine {
         const { classifications, detections, metadata } = rawResult;
 
         // 过滤低置信度结果
-        const filteredClassifications = classifications.filter(
-            item => item.confidence >= this.confidenceThreshold
-        );
-        const filteredDetections = detections.filter(
-            item => item.confidence >= this.confidenceThreshold
-        );
+        const filteredClassifications = classifications.filter((item) => item.confidence >= this.confidenceThreshold);
+        const filteredDetections = detections.filter((item) => item.confidence >= this.confidenceThreshold);
 
         // 生成智能标签
         const smartTags = this._generateSmartTags(filteredClassifications, filteredDetections);
 
         // 计算总体置信度
-        const overallConfidence = this._calculateOverallConfidence(
-            filteredClassifications,
-            filteredDetections
-        );
+        const overallConfidence = this._calculateOverallConfidence(filteredClassifications, filteredDetections);
 
         // 生成描述
         const description = this._generateDescription(filteredClassifications, filteredDetections);
@@ -579,20 +567,20 @@ class EnhancedAIEngine {
         const tags = new Set();
 
         // 从分类结果提取标签
-        classifications.forEach(item => {
+        classifications.forEach((item) => {
             const cleanLabel = this._cleanLabel(item.label);
             if (cleanLabel) tags.add(cleanLabel);
         });
 
         // 从检测结果提取标签
-        detections.forEach(item => {
+        detections.forEach((item) => {
             const cleanLabel = this._cleanLabel(item.label);
             if (cleanLabel) tags.add(cleanLabel);
         });
 
         // 添加组合标签
         const combinedTags = this._generateCombinedTags(Array.from(tags));
-        combinedTags.forEach(tag => tags.add(tag));
+        combinedTags.forEach((tag) => tags.add(tag));
 
         return Array.from(tags).slice(0, 10); // 限制标签数量
     }
@@ -611,21 +599,21 @@ class EnhancedAIEngine {
 
         // 转换为中文（简单映射）
         const translations = {
-            'person': '人物',
-            'car': '汽车',
-            'dog': '狗',
-            'cat': '猫',
-            'bird': '鸟',
-            'flower': '花朵',
-            'tree': '树木',
-            'building': '建筑',
-            'food': '食物',
-            'animal': '动物',
-            'nature': '自然',
-            'landscape': '风景',
-            'portrait': '肖像',
-            'indoor': '室内',
-            'outdoor': '户外'
+            person: '人物',
+            car: '汽车',
+            dog: '狗',
+            cat: '猫',
+            bird: '鸟',
+            flower: '花朵',
+            tree: '树木',
+            building: '建筑',
+            food: '食物',
+            animal: '动物',
+            nature: '自然',
+            landscape: '风景',
+            portrait: '肖像',
+            indoor: '室内',
+            outdoor: '户外'
         };
 
         const lowerLabel = cleaned.toLowerCase();
@@ -703,13 +691,13 @@ class EnhancedAIEngine {
 
         if (detections.length > 0) {
             const objectCounts = {};
-            detections.forEach(detection => {
+            detections.forEach((detection) => {
                 const label = this._cleanLabel(detection.label);
                 objectCounts[label] = (objectCounts[label] || 0) + 1;
             });
 
             const objectList = Object.entries(objectCounts)
-                .map(([label, count]) => count > 1 ? `${count}个${label}` : label)
+                .map(([label, count]) => (count > 1 ? `${count}个${label}` : label))
                 .slice(0, 3)
                 .join('、');
 
@@ -749,16 +737,16 @@ class EnhancedAIEngine {
      */
     _categorizeImage(tags) {
         const categories = {
-            '人物': ['人物', '肖像', '户外人像'],
-            '动物': ['动物', '狗', '猫', '鸟', '野生动物'],
-            '风景': ['风景', '自然', '树木', '户外', '城市风光'],
-            '建筑': ['建筑', '城市风光'],
-            '食物': ['食物'],
-            '其他': []
+            人物: ['人物', '肖像', '户外人像'],
+            动物: ['动物', '狗', '猫', '鸟', '野生动物'],
+            风景: ['风景', '自然', '树木', '户外', '城市风光'],
+            建筑: ['建筑', '城市风光'],
+            食物: ['食物'],
+            其他: []
         };
 
         for (const [category, keywords] of Object.entries(categories)) {
-            if (keywords.some(keyword => tags.includes(keyword))) {
+            if (keywords.some((keyword) => tags.includes(keyword))) {
                 return category;
             }
         }
@@ -775,7 +763,7 @@ class EnhancedAIEngine {
     _calculateComplexity(tags) {
         // 基于标签数量和多样性计算复杂度
         const tagCount = tags.length;
-        const uniqueCategories = new Set(tags.map(tag => this._categorizeImage([tag]))).size;
+        const uniqueCategories = new Set(tags.map((tag) => this._categorizeImage([tag]))).size;
 
         const countScore = Math.min(tagCount / 10, 1);
         const diversityScore = Math.min(uniqueCategories / 5, 1);
@@ -927,9 +915,6 @@ class EnhancedAIEngine {
 // 创建全局AI引擎实例
 const aiEngine = new EnhancedAIEngine();
 
-export {
-    TensorFlowModelManager,
-    EnhancedAIEngine
-};
+export { TensorFlowModelManager, EnhancedAIEngine };
 
 export default aiEngine;

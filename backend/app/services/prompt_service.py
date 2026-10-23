@@ -2,23 +2,39 @@
 Prompt智能服务
 """
 
+import logging
 import re
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from app.models.schemas import PromptOptimizeRequest, PromptOptimizeResponse, PromptTemplate, PromptStyle
+from app.models.schemas import (
+    PromptOptimizeRequest,
+    PromptOptimizeResponse,
+    PromptStyle,
+    PromptTemplate,
+)
+from app.services.llm_client import LLMClient, LLMError
+
+logger = logging.getLogger(__name__)
 
 
 class PromptService:
-    """Prompt智能服务"""
-    
-    def __init__(self):
+    """Prompt智能服务：优先真实模型，失败时回退规则引擎。"""
+
+    def __init__(self, llm: Optional[LLMClient] = None):
         self.templates = self._load_default_templates()
         self.style_keywords = self._load_style_keywords()
+        self.llm = llm or LLMClient()
     
     async def optimize_prompt(self, request: PromptOptimizeRequest) -> PromptOptimizeResponse:
-        """优化Prompt"""
+        """优化Prompt：优先模型，失败回退规则"""
         original = request.prompt.strip()
-        
+
+        if self.llm.enabled:
+            try:
+                return await self._optimize_with_model(request, original)
+            except (LLMError, ValueError, TypeError) as error:
+                logger.warning("Prompt 模型优化失败，回退规则引擎: %s", error)
+
         # 基础优化
         optimized = self._basic_optimize(original)
         
@@ -52,16 +68,37 @@ class PromptService:
             style_suggestions=self._generate_style_suggestions(request.style),
             parameter_suggestions=params,
             tags=self._extract_tags(optimized),
-            explanation=self._generate_explanation(original, optimized)
+            explanation=self._generate_explanation(original, optimized),
+            provider="rules"
         )
     
     async def translate_prompt(self, prompt: str, target_language: str = "en") -> str:
-        """翻译Prompt"""
-        # 简化实现，实际应该调用翻译API
+        """翻译Prompt：优先模型，失败回退规则"""
+        if self.llm.enabled:
+            try:
+                translated = await self.llm.chat_text(
+                    [
+                        {
+                            "role": "system",
+                            "content": "You are a professional prompt translator. Return only the translation.",
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Translate this image-generation prompt into {target_language}. Keep technical terms: {prompt}",
+                        },
+                    ],
+                    temperature=0.1,
+                    max_tokens=1200,
+                )
+                if translated.strip():
+                    return translated.strip()
+            except LLMError as error:
+                logger.warning("Prompt 模型翻译失败，回退规则: %s", error)
+
         if target_language == "en":
             return self._translate_to_english(prompt)
-        elif target_language == "zh":
-            return prompt  # 假设输入是英文
+        if target_language == "zh":
+            return prompt
         return prompt
     
     async def generate_negative_prompt(self, prompt: str, intensity: str = "medium") -> str:
@@ -168,6 +205,63 @@ class PromptService:
         }
         return descriptions.get(style, "未知风格")
     
+    async def _optimize_with_model(
+        self, request: PromptOptimizeRequest, original: str
+    ) -> PromptOptimizeResponse:
+        style = request.style.value if request.style else "auto"
+        prompt = (
+            "Optimize this image-generation prompt. Return only JSON with keys: "
+            "optimized_prompt (string, same language as input), optimized_prompt_en (string), "
+            "negative_prompt (string), tags (array of up to 10 strings), "
+            "style_suggestions (array of 3 style ids), explanation (string, Chinese).\n"
+            f"Original prompt: {original}\n"
+            f"Style: {style}\nTarget model: {request.target_model}\n"
+            f"Language: {request.language}\nAspect ratio: {request.aspect_ratio}\n"
+            "Keep the subject and intent unchanged; add lighting, composition and quality details. "
+            "Do not include markdown fences."
+        )
+        data = await self.llm.chat_json(
+            [
+                {
+                    "role": "system",
+                    "content": "You are an expert prompt engineer for text-to-image models.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            model=self.llm.model,
+            temperature=0.4,
+            max_tokens=1200,
+        )
+        optimized = str(data.get("optimized_prompt") or "").strip()
+        if not optimized:
+            raise ValueError("模型未返回 optimized_prompt")
+
+        negative = str(data.get("negative_prompt") or "").strip() or None
+        tags = data.get("tags")
+        if not isinstance(tags, list):
+            tags = self._extract_tags(optimized)
+        style_suggestions = data.get("style_suggestions")
+        if not isinstance(style_suggestions, list) or not style_suggestions:
+            style_suggestions = self._generate_style_suggestions(request.style)
+        explanation = str(data.get("explanation") or "").strip() or "模型优化完成"
+
+        return PromptOptimizeResponse(
+            original_prompt=original,
+            optimized_prompt=optimized,
+            optimized_prompt_en=str(data.get("optimized_prompt_en") or "").strip() or None,
+            negative_prompt=negative,
+            negative_prompt_en=(
+                self._translate_to_english(negative) if negative and request.language == "zh" else None
+            ),
+            style_suggestions=[str(item) for item in style_suggestions][:5],
+            parameter_suggestions=self._generate_parameters(
+                request.target_model, request.style, request.aspect_ratio
+            ),
+            tags=[str(item) for item in tags][:10],
+            explanation=explanation,
+            provider="openai",
+        )
+
     def _basic_optimize(self, prompt: str) -> str:
         """基础优化"""
         # 清理多余空格

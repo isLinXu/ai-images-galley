@@ -87,8 +87,8 @@ class ModalManager {
 
         // 从活动模态框集合中移除
         this.activeModals.delete(modalId);
-        const modalInfo = this.modalStack.find(m => m.id === modalId);
-        this.modalStack = this.modalStack.filter(m => m.id !== modalId);
+        const modalInfo = this.modalStack.find((m) => m.id === modalId);
+        this.modalStack = this.modalStack.filter((m) => m.id !== modalId);
 
         // 添加隐藏动画
         modal.classList.remove('show');
@@ -120,7 +120,14 @@ class ModalManager {
      */
     hideAll() {
         const modalIds = Array.from(this.activeModals);
-        modalIds.forEach(id => this.hide(id));
+        modalIds.forEach((id) => this.hide(id));
+    }
+
+    /**
+     * 向后兼容别名
+     */
+    closeAll() {
+        this.hideAll();
     }
 
     /**
@@ -289,18 +296,18 @@ class TooltipManager {
                 }
 
                 // 清理不允许的属性
-                Array.from(node.attributes).forEach(attr => {
+                Array.from(node.attributes).forEach((attr) => {
                     if (!allowedAttributes.includes(attr.name.toLowerCase())) {
                         node.removeAttribute(attr.name);
                     }
                 });
 
                 // 递归清理子节点
-                Array.from(node.childNodes).forEach(child => clean(child));
+                Array.from(node.childNodes).forEach((child) => clean(child));
             }
         };
 
-        Array.from(div.childNodes).forEach(node => clean(node));
+        Array.from(div.childNodes).forEach((node) => clean(node));
         return div.innerHTML;
     }
 
@@ -385,7 +392,7 @@ class TooltipManager {
      */
     clear() {
         const tooltipIds = Array.from(this.activeTooltips.keys());
-        tooltipIds.forEach(id => this.hide(id));
+        tooltipIds.forEach((id) => this.hide(id));
     }
 }
 
@@ -407,12 +414,7 @@ class ProgressManager {
      * @returns {string} 进度条ID
      */
     create(id, options = {}) {
-        const {
-            title = '处理中...',
-            showPercentage = true,
-            showCancel = false,
-            onCancel = null
-        } = options;
+        const { title = '处理中...', showPercentage = true, showCancel = false, onCancel = null } = options;
 
         const progressElement = this._createProgressElement(id, {
             title,
@@ -590,12 +592,7 @@ class LoadingManager {
      * @param {Object} options - 选项
      */
     show(id, options = {}) {
-        const {
-            message = '加载中...',
-            global = false,
-            target = null,
-            spinner = true
-        } = options;
+        const { message = '加载中...', global = false, target = null, spinner = true } = options;
 
         const loadingState = {
             id,
@@ -804,8 +801,9 @@ class ThemeManager {
         // 移除旧主题类
         document.body.classList.remove(`theme-${oldTheme}`);
 
-        // 添加新主题类
+        // 添加新主题类；Tailwind 暗色模式使用根节点上的 dark 类
         document.body.classList.add(`theme-${themeName}`);
+        document.documentElement.classList.toggle('dark', themeName === 'dark');
 
         // 更新CSS变量
         this._updateCSSVariables(this.themes[themeName]);
@@ -961,17 +959,16 @@ class ResponsiveManager {
      */
     _updateBreakpoint() {
         const width = window.innerWidth;
+        this.currentBreakpoint = 'xs';
 
-        for (const [name, minWidth] of Object.entries(this.breakpoints)) {
+        for (const [name, minWidth] of Object.entries(this.breakpoints || {})) {
             if (width >= minWidth) {
                 this.currentBreakpoint = name;
             }
         }
 
         // 更新body类
-        document.body.className = document.body.className
-            .replace(/\bbreakpoint-\w+\b/g, '')
-            .trim();
+        document.body.className = document.body.className.replace(/\bbreakpoint-\w+\b/g, '').trim();
         document.body.classList.add(`breakpoint-${this.currentBreakpoint}`);
     }
 
@@ -1041,7 +1038,6 @@ class UIManager {
 
             eventManager.emit('ui:initialized');
             uiLogger.info('UI管理器初始化完成');
-
         } catch (error) {
             console.error('UI管理器初始化失败:', error);
             throw error;
@@ -1105,7 +1101,7 @@ class UIManager {
     _handleGlobalClick(event) {
         // 关闭所有下拉菜单
         const dropdowns = document.querySelectorAll('.dropdown.open');
-        dropdowns.forEach(dropdown => {
+        dropdowns.forEach((dropdown) => {
             if (!dropdown.contains(event.target)) {
                 dropdown.classList.remove('open');
             }
@@ -1135,7 +1131,7 @@ class UIManager {
      */
     toggleFullscreen() {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(err => {
+            document.documentElement.requestFullscreen().catch((err) => {
                 console.error('无法进入全屏模式:', err);
             });
         } else {
@@ -1150,12 +1146,7 @@ class UIManager {
      * @returns {Promise<boolean>} 用户选择结果
      */
     confirm(message, options = {}) {
-        const {
-            title = '确认',
-            confirmText = '确定',
-            cancelText = '取消',
-            type = 'warning'
-        } = options;
+        const { title = '确认', confirmText = '确定', cancelText = '取消', type = 'warning' } = options;
 
         return new Promise((resolve) => {
             // 创建确认对话框
@@ -1243,14 +1234,6 @@ class UIManager {
 // 创建全局UI管理器实例
 const uiManager = new UIManager();
 
-export {
-    ModalManager,
-    TooltipManager,
-    ProgressManager,
-    LoadingManager,
-    ThemeManager,
-    ResponsiveManager,
-    UIManager
-};
+export { ModalManager, TooltipManager, ProgressManager, LoadingManager, ThemeManager, ResponsiveManager, UIManager };
 
 export default uiManager;

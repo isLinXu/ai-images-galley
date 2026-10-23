@@ -245,3 +245,11 @@ coverage/
 
 # WorkBuddy
 .workbuddy/
+
+# 项目需要可复现构建：锁定依赖版本（覆盖上面的模板忽略规则）
+!package-lock.json
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/

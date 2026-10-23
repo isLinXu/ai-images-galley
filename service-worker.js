@@ -1,315 +1,291 @@
 /**
  * AI智能相册系统 - Service Worker
- * 提供离线缓存和性能优化
+ * 提供离线缓存和静态资源加速。
+ *
+ * 注意：所有资源路径都基于 Service Worker 的作用域计算，
+ * 因此既支持站点根路径部署，也支持 GitHub Pages 的 /<repo>/ 子路径部署。
  */
 
-const CACHE_NAME = 'ai-gallery-v1';
-const STATIC_CACHE = 'ai-gallery-static-v1';
-const IMAGE_CACHE = 'ai-gallery-images-v1';
-const API_CACHE = 'ai-gallery-api-v1';
+const CACHE_VERSION = 'v6';
+const STATIC_CACHE = `ai-gallery-static-${CACHE_VERSION}`;
+const IMAGE_CACHE = `ai-gallery-images-${CACHE_VERSION}`;
+const API_CACHE = `ai-gallery-api-${CACHE_VERSION}`;
+const CACHE_PREFIX = 'ai-gallery-';
 
-// 静态资源列表
+const APP_SCOPE = self.registration.scope;
+
+function scoped(path) {
+    return new URL(path, APP_SCOPE).href;
+}
+
+// 只预缓存应用自身的核心资源；外部 CDN 资源交给浏览器 HTTP 缓存。
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/index-modular.html',
-  '/manifest.json',
-  '/src/styles/main.css',
-  '/src/js/app.js',
-  '/src/js/uiManager.js',
-  '/src/js/imageManager.js',
-  '/src/js/galleryManager.js',
-  '/src/js/aiEngine.js',
-  '/src/js/storageManager.js',
-  '/src/js/adminManager.js',
-  '/src/js/eventManager.js',
-  '/src/js/utils.js',
-  '/src/js/config.js'
-];
-
-// 外部CDN资源（可选缓存）
-const CDN_ASSETS = [
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js',
-  'https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js',
-  'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js'
+    './',
+    './index.html',
+    './index-modular.html',
+    './manifest.json',
+    './src/styles/main.css',
+    './src/js/app.js',
+    './src/js/config.js',
+    './src/js/utils.js',
+    './src/js/logger.js',
+    './src/js/eventManager.js',
+    './src/js/storageManager.js',
+    './src/js/uiManager.js',
+    './src/js/imageManager.js',
+    './src/js/aiEngine.js',
+    './src/js/galleryManager.js',
+    './src/js/galleryRenderer.js',
+    './src/js/adminManager.js',
+    './src/js/apiClient.js',
+    './src/js/promptEngine.js',
+    './src/js/multimodalEngine.js',
+    './src/js/imageWorker.js',
+    './src/js/imageSource.js',
+    './vendor/tailwind.css',
+    './vendor/tailwind-legacy.css',
+    './vendor/fontawesome/css/all.min.css',
+    './assets/icons/icon-192x192.png',
+    './assets/icons/icon-512x512.png',
+    './assets/icons/icon-maskable-512.png',
+    './assets/icons/icon-1024.png'
 ];
 
 /**
- * 安装事件 - 缓存静态资源
+ * 安装：逐个缓存核心资源，单个 404 不应导致整个安装失败。
  */
 self.addEventListener('install', (event) => {
-  console.log('[SW] 安装中...');
-
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then(cache => {
-        console.log('[SW] 缓存静态资源');
-        return cache.addAll(STATIC_ASSETS);
-      })
-      .then(() => {
-        console.log('[SW] 静态资源缓存完成');
-        return self.skipWaiting();
-      })
-      .catch(error => {
-        console.warn('[SW] 静态资源缓存失败:', error);
-      })
-  );
+    event.waitUntil(
+        (async () => {
+            const cache = await caches.open(STATIC_CACHE);
+            const results = await Promise.allSettled(STATIC_ASSETS.map((asset) => cache.add(scoped(asset))));
+            const failed = results.filter((result) => result.status === 'rejected').length;
+            if (failed > 0) {
+                console.warn(`[SW] ${failed}/${STATIC_ASSETS.length} 个静态资源预缓存失败`);
+            }
+            await self.skipWaiting();
+        })()
+    );
 });
 
 /**
- * 激活事件 - 清理旧缓存
+ * 激活：清理旧版本缓存并立即接管页面。
  */
 self.addEventListener('activate', (event) => {
-  console.log('[SW] 激活中...');
-
-  event.waitUntil(
-    caches.keys()
-      .then(cacheNames => {
-        return Promise.all(
-          cacheNames
-            .filter(name => {
-              return name.startsWith('ai-gallery-') &&
-                name !== STATIC_CACHE &&
-                name !== IMAGE_CACHE &&
-                name !== API_CACHE;
-            })
-            .map(name => {
-              console.log('[SW] 删除旧缓存:', name);
-              return caches.delete(name);
-            })
-        );
-      })
-      .then(() => {
-        console.log('[SW] 激活完成');
-        return self.clients.claim();
-      })
-  );
+    event.waitUntil(
+        (async () => {
+            const names = await caches.keys();
+            await Promise.all(
+                names
+                    .filter((name) => name.startsWith(CACHE_PREFIX) && !name.endsWith(CACHE_VERSION))
+                    .map((name) => caches.delete(name))
+            );
+            await self.clients.claim();
+        })()
+    );
 });
 
+function isSameOrigin(url) {
+    return url.origin === self.location.origin;
+}
+
 /**
- * 获取缓存策略
- * @param {Request} request - 请求对象
- * @returns {string} 缓存策略名称
+ * 获取缓存策略。
  */
 function getCacheStrategy(request) {
-  const url = new URL(request.url);
-  const pathname = url.pathname;
+    const url = new URL(request.url);
 
-  // 静态资源
-  if (request.destination === 'style' ||
-      request.destination === 'script' ||
-      request.destination === 'document' ||
-      request.destination === 'manifest' ||
-      pathname.endsWith('.css') ||
-      pathname.endsWith('.js') ||
-      pathname.endsWith('.html')) {
-    return 'stale-while-revalidate';
-  }
+    if (!isSameOrigin(url)) {
+        return 'passthrough';
+    }
 
-  // 图片资源
-  if (request.destination === 'image' ||
-      pathname.match(/\.(jpg|jpeg|png|gif|webp|svg|ico)$/)) {
-    return 'cache-first';
-  }
+    if (request.mode === 'navigate') {
+        return 'navigation';
+    }
 
-  // API 请求
-  if (pathname.startsWith('/api/') || request.headers.get('Accept')?.includes('application/json')) {
+    if (url.pathname.includes('/api/')) {
+        return 'network-first';
+    }
+
+    if (request.destination === 'image' || /\.(jpg|jpeg|png|gif|webp|avif|svg|ico)$/i.test(url.pathname)) {
+        return 'cache-first';
+    }
+
+    if (
+        request.destination === 'style' ||
+        request.destination === 'script' ||
+        request.destination === 'font' ||
+        request.destination === 'manifest' ||
+        /\.(css|js|woff2?|ttf|json|html)$/i.test(url.pathname)
+    ) {
+        return 'stale-while-revalidate';
+    }
+
     return 'network-first';
-  }
-
-  // 字体文件
-  if (request.destination === 'font') {
-    return 'cache-first';
-  }
-
-  // 默认策略
-  return 'network-first';
 }
 
-/**
- * 缓存优先策略
- */
 async function cacheFirst(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-
-  if (cached) {
-    return cached;
-  }
-
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (error) {
-    console.warn('[SW] 缓存优先策略失败:', error);
-    return new Response('离线模式 - 资源不可用', { status: 503 });
-  }
-}
-
-/**
- * 网络优先策略
- */
-async function networkFirst(request, cacheName, maxAge = 300000) {
-  const cache = await caches.open(cacheName);
-
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const responseToCache = networkResponse.clone();
-      // 添加缓存时间戳
-      const headers = new Headers(responseToCache.headers);
-      headers.set('sw-cached-at', Date.now().toString());
-      const modifiedResponse = new Response(responseToCache.body, {
-        status: responseToCache.status,
-        statusText: responseToCache.statusText,
-        headers
-      });
-      cache.put(request, modifiedResponse);
-    }
-    return networkResponse;
-  } catch (error) {
+    const cache = await caches.open(cacheName);
     const cached = await cache.match(request);
     if (cached) {
-      // 检查缓存是否过期
-      const cachedAt = cached.headers.get('sw-cached-at');
-      if (cachedAt && (Date.now() - parseInt(cachedAt)) < maxAge) {
         return cached;
-      }
     }
-    console.warn('[SW] 网络优先策略失败:', error);
-    return new Response('离线模式 - 网络不可用', { status: 503 });
-  }
+
+    try {
+        const response = await fetch(request);
+        if (response.ok && response.type === 'basic') {
+            cache.put(request, response.clone());
+        }
+        return response;
+    } catch (error) {
+        console.warn('[SW] 图片缓存失败:', error);
+        return new Response('', { status: 504, statusText: 'Offline' });
+    }
 }
 
-/**
- * 过时重新验证策略
- */
+async function networkFirst(request, cacheName) {
+    const cache = await caches.open(cacheName);
+    try {
+        const response = await fetch(request);
+        if (response.ok && response.type === 'basic') {
+            cache.put(request, response.clone());
+        }
+        return response;
+    } catch (error) {
+        const cached = await cache.match(request);
+        if (cached) {
+            return cached;
+        }
+        return new Response('离线模式：网络不可用', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+    }
+}
+
 async function staleWhileRevalidate(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+    const cache = await caches.open(cacheName);
+    const cached = await cache.match(request);
+    const networkPromise = fetch(request)
+        .then((response) => {
+            if (response.ok && response.type === 'basic') {
+                cache.put(request, response.clone());
+            }
+            return response;
+        })
+        .catch(() => null);
 
-  // 发起网络请求更新缓存（后台）
-  const fetchPromise = fetch(request)
-    .then(response => {
-      if (response.ok) {
-        cache.put(request, response.clone());
-      }
-      return response;
-    })
-    .catch(error => {
-      console.warn('[SW] 后台更新失败:', error);
+    if (cached) {
+        // 后台更新，不阻塞当前请求。
+        networkPromise.catch(() => {});
+        return cached;
+    }
+
+    const response = await networkPromise;
+    if (response) {
+        return response;
+    }
+
+    return new Response('离线模式：资源不可用', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     });
+}
 
-  // 立即返回缓存（如果有）
-  if (cached) {
-    fetchPromise; // 触发但不等待
-    return cached;
-  }
-
-  // 没有缓存时等待网络请求
-  return fetchPromise;
+async function navigationHandler(request) {
+    const cache = await caches.open(STATIC_CACHE);
+    try {
+        const response = await fetch(request);
+        if (response.ok && response.type === 'basic') {
+            cache.put(request, response.clone());
+        }
+        return response;
+    } catch (error) {
+        const cached =
+            (await cache.match(request)) ||
+            (await cache.match(scoped('./index.html'))) ||
+            (await cache.match(scoped('./')));
+        if (cached) {
+            return cached;
+        }
+        return new Response('离线模式：页面不可用', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+    }
 }
 
 /**
- * 获取请求对象
- * @param {Request} request - 原始请求
- * @returns {Request} 规范化后的请求
- */
-function normalizeRequest(request) {
-  const url = new URL(request.url);
-
-  // 移除查询参数（用于缓存键）
-  if (url.search) {
-    return new Request(url.origin + url.pathname, request);
-  }
-
-  return request;
-}
-
-/**
- * 抓取事件 - 拦截请求
+ * 抓取事件。
  */
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const strategy = getCacheStrategy(request);
-  const normalizedRequest = normalizeRequest(request);
+    const { request } = event;
 
-  // 忽略非 GET 请求
-  if (request.method !== 'GET') {
-    return;
-  }
+    if (request.method !== 'GET') {
+        return;
+    }
 
-  // 忽略 Chrome 扩展请求
-  if (request.url.startsWith('chrome-extension://')) {
-    return;
-  }
+    const url = new URL(request.url);
+    if (!isSameOrigin(url) || url.protocol === 'chrome-extension:') {
+        return;
+    }
 
-  let cacheName;
-  switch (strategy) {
-    case 'cache-first':
-      cacheName = IMAGE_CACHE;
-      event.respondWith(cacheFirst(normalizedRequest, cacheName));
-      break;
-    case 'network-first':
-      cacheName = API_CACHE;
-      event.respondWith(networkFirst(normalizedRequest, cacheName));
-      break;
-    case 'stale-while-revalidate':
-      cacheName = STATIC_CACHE;
-      event.respondWith(staleWhileRevalidate(normalizedRequest, cacheName));
-      break;
-    default:
-      event.respondWith(networkFirst(normalizedRequest, API_CACHE));
-  }
+    const strategy = getCacheStrategy(request);
+
+    switch (strategy) {
+        case 'navigation':
+            event.respondWith(navigationHandler(request));
+            break;
+        case 'cache-first':
+            event.respondWith(cacheFirst(request, IMAGE_CACHE));
+            break;
+        case 'network-first':
+            event.respondWith(networkFirst(request, API_CACHE));
+            break;
+        case 'stale-while-revalidate':
+            event.respondWith(staleWhileRevalidate(request, STATIC_CACHE));
+            break;
+        default:
+            break;
+    }
 });
 
 /**
- * 消息事件 - 处理主线程消息
+ * 消息事件：支持手动跳过等待、查询版本、清理缓存。
  */
 self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+    const data = event.data || {};
 
-  if (event.data && event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({
-      version: CACHE_NAME,
-      timestamp: Date.now()
-    });
-  }
+    if (data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    event.waitUntil(
-      caches.keys().then(names => {
-        return Promise.all(names.map(name => caches.delete(name)));
-      }).then(() => {
-        event.ports[0].postMessage({ success: true });
-      })
-    );
-  }
+    if (data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
+        event.ports[0].postMessage({
+            version: CACHE_VERSION,
+            scope: APP_SCOPE,
+            timestamp: Date.now()
+        });
+    }
+
+    if (data.type === 'CLEAR_CACHE' && event.ports && event.ports[0]) {
+        event.waitUntil(
+            (async () => {
+                const names = await caches.keys();
+                await Promise.all(
+                    names.filter((name) => name.startsWith(CACHE_PREFIX)).map((name) => caches.delete(name))
+                );
+                event.ports[0].postMessage({ success: true });
+            })()
+        );
+    }
 });
 
 /**
- * 同步事件 - 后台同步（如果支持）
+ * 后台同步占位：当前应用的上传是显式操作，暂不需要队列同步。
  */
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-images') {
-    event.waitUntil(syncPendingImages());
-  }
+    if (event.tag === 'sync-images') {
+        event.waitUntil(Promise.resolve());
+    }
 });
-
-/**
- * 同步待处理的图片操作
- */
-async function syncPendingImages() {
-  // 这里可以实现后台同步逻辑
-  console.log('[SW] 执行后台同步');
-}
-
-console.log('[SW] Service Worker 已加载');

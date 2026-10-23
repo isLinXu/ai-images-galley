@@ -4,6 +4,7 @@
  */
 
 import { promptAPI } from './apiClient.js';
+import { CONFIG } from './config.js';
 import { appLogger } from './logger.js';
 
 /**
@@ -42,7 +43,9 @@ class PromptIntelligenceEngine {
         this.maxHistorySize = 50;
         this.isLoading = false;
 
-        this._loadTemplates();
+        if (CONFIG.API.ENABLED) {
+            this._loadTemplates();
+        }
     }
 
     /**
@@ -106,9 +109,10 @@ class PromptIntelligenceEngine {
 
         // 添加质量描述
         if (enhanceDetails && !/high quality|detailed|masterpiece|高质量|细节/.test(optimized.toLowerCase())) {
-            const qualityDesc = targetModel === 'midjourney'
-                ? 'highly detailed, cinematic lighting, 8k, masterpiece'
-                : 'highly detailed, 8k uhd, professional quality';
+            const qualityDesc =
+                targetModel === 'midjourney'
+                    ? 'highly detailed, cinematic lighting, 8k, masterpiece'
+                    : 'highly detailed, 8k uhd, professional quality';
             optimized += `, ${qualityDesc}`;
         }
 
@@ -132,7 +136,9 @@ class PromptIntelligenceEngine {
             optimized_prompt_en: optimized,
             negative_prompt: negativePrompt,
             negative_prompt_en: negativePrompt,
-            style_suggestions: Object.values(PROMPT_STYLES).slice(0, 3).map(s => s.id),
+            style_suggestions: Object.values(PROMPT_STYLES)
+                .slice(0, 3)
+                .map((s) => s.id),
             parameter_suggestions: TARGET_MODELS[targetModel.toUpperCase()]?.parameters || {},
             tags: this._extractTags(optimized),
             explanation: '使用本地规则优化（后端服务不可用）'
@@ -156,7 +162,7 @@ class PromptIntelligenceEngine {
     _extractTags(prompt) {
         const words = prompt.toLowerCase().match(/\b\w{3,}\b/g) || [];
         const commonWords = new Set(['the', 'and', 'for', 'with', 'this', 'that', 'high', 'quality']);
-        return [...new Set(words.filter(w => !commonWords.has(w)))].slice(0, 10);
+        return [...new Set(words.filter((w) => !commonWords.has(w)))].slice(0, 10);
     }
 
     /**
@@ -204,10 +210,10 @@ class PromptIntelligenceEngine {
 
         analysis.overall_score = Math.round(
             analysis.length_score * 0.2 +
-            (analysis.has_subject ? 0.2 : 0) +
-            (analysis.has_style ? 0.2 : 0) +
-            (analysis.has_quality ? 0.2 : 0) +
-            (analysis.has_lighting ? 0.2 : 0),
+                (analysis.has_subject ? 0.2 : 0) +
+                (analysis.has_style ? 0.2 : 0) +
+                (analysis.has_quality ? 0.2 : 0) +
+                (analysis.has_lighting ? 0.2 : 0),
             2
         );
 
@@ -221,7 +227,7 @@ class PromptIntelligenceEngine {
         try {
             const result = await promptAPI.getTemplates(category, style);
             if (result.success && result.data) {
-                result.data.forEach(template => this.templates.set(template.id, template));
+                result.data.forEach((template) => this.templates.set(template.id, template));
                 return result.data;
             }
         } catch (error) {
@@ -240,7 +246,8 @@ class PromptIntelligenceEngine {
                 id: 'portrait',
                 name: '人像摄影',
                 description: '专业人像摄影风格',
-                template: 'professional portrait of {subject}, {expression}, {lighting} lighting, {background} background, high quality, detailed',
+                template:
+                    'professional portrait of {subject}, {expression}, {lighting} lighting, {background} background, high quality, detailed',
                 category: 'photography',
                 variables: ['subject', 'expression', 'lighting', 'background']
             },
@@ -248,7 +255,8 @@ class PromptIntelligenceEngine {
                 id: 'landscape',
                 name: '风景摄影',
                 description: '壮丽风景摄影',
-                template: 'breathtaking landscape of {location}, {time_of_day}, {weather}, {mood} atmosphere, ultra detailed, 8k uhd',
+                template:
+                    'breathtaking landscape of {location}, {time_of_day}, {weather}, {mood} atmosphere, ultra detailed, 8k uhd',
                 category: 'photography',
                 variables: ['location', 'time_of_day', 'weather', 'mood']
             },
@@ -256,15 +264,16 @@ class PromptIntelligenceEngine {
                 id: 'digital_art',
                 name: '数字艺术',
                 description: '创意数字艺术作品',
-                template: 'digital art of {subject}, {style}, vibrant colors, intricate details, concept art, trending on artstation',
+                template:
+                    'digital art of {subject}, {style}, vibrant colors, intricate details, concept art, trending on artstation',
                 category: 'art',
                 variables: ['subject', 'style']
             }
         ];
 
         let filtered = templates;
-        if (category) filtered = filtered.filter(t => t.category === category);
-        if (style) filtered = filtered.filter(t => t.style === style);
+        if (category) filtered = filtered.filter((t) => t.category === category);
+        if (style) filtered = filtered.filter((t) => t.style === style);
 
         return filtered;
     }
@@ -273,7 +282,7 @@ class PromptIntelligenceEngine {
      * 渲染模板
      */
     renderTemplate(templateId, variables) {
-        const template = this.templates.get(templateId) || this._getLocalTemplates().find(t => t.id === templateId);
+        const template = this.templates.get(templateId) || this._getLocalTemplates().find((t) => t.id === templateId);
         if (!template) throw new Error(`模板不存在: ${templateId}`);
 
         let result = template.template;

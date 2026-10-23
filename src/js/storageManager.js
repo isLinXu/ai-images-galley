@@ -480,21 +480,16 @@ class StorageManager {
         const prefixKey = (key) => `${namespace}:${key}`;
 
         return {
-            get: (key, defaultValue, adapter) =>
-                this.get(prefixKey(key), defaultValue, adapter),
-            set: (key, value, adapter) =>
-                this.set(prefixKey(key), value, adapter),
-            remove: (key, adapter) =>
-                this.remove(prefixKey(key), adapter),
-            has: (key, adapter) =>
-                this.has(prefixKey(key), adapter),
+            get: (key, defaultValue, adapter) => this.get(prefixKey(key), defaultValue, adapter),
+            set: (key, value, adapter) => this.set(prefixKey(key), value, adapter),
+            remove: (key, adapter) => this.remove(prefixKey(key), adapter),
+            has: (key, adapter) => this.has(prefixKey(key), adapter),
             keys: (adapter) =>
                 this.keys(adapter)
-                    .filter(key => key.startsWith(`${namespace}:`))
-                    .map(key => key.substring(namespace.length + 1)),
+                    .filter((key) => key.startsWith(`${namespace}:`))
+                    .map((key) => key.substring(namespace.length + 1)),
             clear: () => {
-                const keys = this.keys()
-                    .filter(key => key.startsWith(`${namespace}:`));
+                const keys = this.keys().filter((key) => key.startsWith(`${namespace}:`));
                 for (const key of keys) {
                     this.remove(key);
                 }
@@ -604,21 +599,20 @@ class SpecializedStorageManager {
     get aiCache() {
         return {
             get: (key) => this.storage.get(`${STORAGE_KEYS.AI_CACHE}:${key}`),
-            set: (key, value) => this.storage.set(`${STORAGE_KEYS.AI_CACHE}:${key}`, {
-                value,
-                timestamp: Date.now()
-            }),
+            set: (key, value) =>
+                this.storage.set(`${STORAGE_KEYS.AI_CACHE}:${key}`, {
+                    value,
+                    timestamp: Date.now()
+                }),
             remove: (key) => this.storage.remove(`${STORAGE_KEYS.AI_CACHE}:${key}`),
             clear: () => {
-                const keys = this.storage.keys()
-                    .filter(key => key.startsWith(STORAGE_KEYS.AI_CACHE));
+                const keys = this.storage.keys().filter((key) => key.startsWith(STORAGE_KEYS.AI_CACHE));
                 for (const key of keys) {
                     this.storage.remove(key);
                 }
             },
             cleanup: () => {
-                const keys = this.storage.keys()
-                    .filter(key => key.startsWith(STORAGE_KEYS.AI_CACHE));
+                const keys = this.storage.keys().filter((key) => key.startsWith(STORAGE_KEYS.AI_CACHE));
                 for (const key of keys) {
                     const cached = this.storage.get(key);
                     if (cached && TimeUtils.isExpired(cached.timestamp)) {
@@ -660,6 +654,24 @@ class SpecializedStorageManager {
     }
 
     /**
+     * 向后兼容别名：旧代码使用 userPreferences
+     */
+    get userPreferences() {
+        return this.preferences;
+    }
+
+    /**
+     * 向后兼容别名：旧代码使用 adminData 的 get/set/remove 接口
+     */
+    get adminData() {
+        return {
+            get: (key, defaultValue = null) => this.storage.get(`admin:${key}`, defaultValue),
+            set: (key, value) => this.storage.set(`admin:${key}`, value),
+            remove: (key) => this.storage.remove(`admin:${key}`)
+        };
+    }
+
+    /**
      * 主题管理
      */
     get theme() {
@@ -674,6 +686,8 @@ class SpecializedStorageManager {
 // 创建全局存储管理器实例
 const storageManager = new StorageManager();
 const specializedStorage = new SpecializedStorageManager(storageManager);
+// 兼容旧代码中的 storageManager.specializedStorage 访问方式
+storageManager.specializedStorage = specializedStorage;
 
 export {
     StorageManager,

@@ -55,12 +55,7 @@ class MultimodalEngine {
      * 图像转文本
      */
     async imageToText(imageId, options = {}) {
-        const {
-            task = 'describe',
-            language = 'zh',
-            maxLength = 500,
-            style = null
-        } = options;
+        const { task = 'describe', language = 'zh', maxLength = 500, style = null } = options;
 
         try {
             appLogger.info(`图像转文本: ${task} (${language})`);
@@ -185,10 +180,7 @@ class MultimodalEngine {
      * 视觉问答
      */
     async visualQA(imageId, question, options = {}) {
-        const {
-            language = 'zh',
-            detailLevel = 'auto'
-        } = options;
+        const { language = 'zh', detailLevel = 'auto' } = options;
 
         try {
             appLogger.info('视觉问答:', question);
@@ -215,9 +207,10 @@ class MultimodalEngine {
             appLogger.error('视觉问答失败:', error);
             return {
                 success: true, // 降级返回
-                answer: language === 'zh'
-                    ? '根据图像内容分析，这是一张展示自然风景的照片。'
-                    : 'Based on the image, this appears to be a natural landscape photo.',
+                answer:
+                    language === 'zh'
+                        ? '根据图像内容分析，这是一张展示自然风景的照片。'
+                        : 'Based on the image, this appears to be a natural landscape photo.',
                 answerEn: 'Based on the image, this appears to be a natural landscape photo.',
                 confidence: 0.5,
                 fallback: true
@@ -229,10 +222,7 @@ class MultimodalEngine {
      * 风格迁移
      */
     async styleTransfer(imageId, targetStyle, options = {}) {
-        const {
-            intensity = 0.8,
-            preserveContent = true
-        } = options;
+        const { intensity = 0.8, preserveContent = true } = options;
 
         const taskId = this._generateTaskId();
 
@@ -337,9 +327,12 @@ class MultimodalEngine {
      * 批量图像转文本
      */
     async batchImageToText(imageIds, task = 'describe', language = 'zh') {
-        const promises = imageIds.map(id =>
-            this.imageToText(id, { task, language })
-                .catch(error => ({ success: false, error: error.message, imageId: id }))
+        const promises = imageIds.map((id) =>
+            this.imageToText(id, { task, language }).catch((error) => ({
+                success: false,
+                error: error.message,
+                imageId: id
+            }))
         );
 
         return Promise.all(promises);

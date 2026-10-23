@@ -5,11 +5,19 @@
 
 import { appLogger } from './logger.js';
 
+function readApiBaseUrl() {
+    try {
+        return localStorage.getItem('api_base_url') || 'http://localhost:8000/api/v1';
+    } catch {
+        return 'http://localhost:8000/api/v1';
+    }
+}
+
 /**
  * API配置
  */
 const API_CONFIG = {
-    BASE_URL: localStorage.getItem('api_base_url') || 'http://localhost:8000/api/v1',
+    BASE_URL: readApiBaseUrl(),
     TIMEOUT: 30000,
     RETRY_COUNT: 3,
     RETRY_DELAY: 1000,
@@ -89,7 +97,12 @@ class APIClient {
     _setupDefaultInterceptors() {
         // 默认请求拦截器 - 添加认证头
         this.addRequestInterceptor((config) => {
-            const token = localStorage.getItem('auth_token');
+            let token = '';
+            try {
+                token = localStorage.getItem('auth_token') || '';
+            } catch {
+                token = '';
+            }
             if (token) {
                 config.headers = config.headers || {};
                 config.headers['Authorization'] = `Bearer ${token}`;
@@ -97,16 +110,18 @@ class APIClient {
             return config;
         });
 
-        // 默认响应拦截器 - 处理通用错误
+        // 默认响应拦截器 - 处理通用错误（不在这里重新抛出，由 _executeRequest 统一抛出）
         this.addResponseInterceptor(
             (response) => response,
             async (error) => {
                 if (error.status === 401) {
-                    // Token过期，清除认证状态
-                    localStorage.removeItem('auth_token');
+                    try {
+                        localStorage.removeItem('auth_token');
+                    } catch {
+                        // ignore
+                    }
                     window.dispatchEvent(new CustomEvent('api:unauthorized'));
                 }
-                throw error;
             }
         );
     }
@@ -148,9 +163,7 @@ class APIClient {
                     response = await interceptor.onFulfilled(response);
                 }
             } catch (error) {
-                if (interceptor.onRejected) {
-                    await interceptor.onRejected(error);
-                }
+                appLogger.warn('响应拦截器执行失败:', error.message);
             }
         }
         return response;
@@ -174,20 +187,21 @@ class APIClient {
     async _fetchWithTimeout(url, options, timeout) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), timeout);
+        const fetchOptions = { ...options };
+        delete fetchOptions.timeout;
 
         try {
-            const response = await fetch(url, {
-                ...options,
+            return await fetch(url, {
+                ...fetchOptions,
                 signal: controller.signal
             });
-            clearTimeout(id);
-            return response;
         } catch (error) {
-            clearTimeout(id);
             if (error.name === 'AbortError') {
                 throw new Error('请求超时');
             }
             throw error;
+        } finally {
+            clearTimeout(id);
         }
     }
 
@@ -196,33 +210,47 @@ class APIClient {
      */
     async _request(endpoint, options = {}, retryCount = this.retryCount) {
         const url = this._buildURL(endpoint);
+        const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+        const hasBody = options.body !== undefined && options.body !== null;
 
-        // 准备请求配置
+        const defaultHeaders = { Accept: 'application/json' };
+        if (hasBody && !isFormData) {
+            defaultHeaders['Content-Type'] = 'application/json';
+        }
+
         let config = {
+            ...options,
             headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            ...options
+                ...defaultHeaders,
+                ...(options.headers || {})
+            }
         };
 
         // 执行请求拦截器
         config = await this._runRequestInterceptors(config);
 
-        // 检查重复请求
-        const requestKey = `${url}:${JSON.stringify(config)}`;
-        if (this.pendingRequests.has(requestKey)) {
+        // 检查重复请求；FormData 的内容无法稳定序列化，不做去重
+        const requestKey = `${url}:${JSON.stringify({
+            method: config.method || 'GET',
+            body: isFormData ? null : config.body,
+            headers: config.headers
+        })}`;
+
+        if (!isFormData && this.pendingRequests.has(requestKey)) {
             return this.pendingRequests.get(requestKey);
         }
 
         const requestPromise = this._executeRequest(url, config, retryCount);
-        this.pendingRequests.set(requestKey, requestPromise);
+        if (!isFormData) {
+            this.pendingRequests.set(requestKey, requestPromise);
+        }
 
         try {
-            const result = await requestPromise;
-            return result;
+            return await requestPromise;
         } finally {
-            this.pendingRequests.delete(requestKey);
+            if (!isFormData) {
+                this.pendingRequests.delete(requestKey);
+            }
         }
     }
 
@@ -231,45 +259,50 @@ class APIClient {
      */
     async _executeRequest(url, config, retryCount) {
         let lastError;
+        const method = (config.method || 'GET').toUpperCase();
+        // POST 通常不是幂等操作（例如上传），不应自动重试。
+        const retryableMethod = ['GET', 'HEAD', 'PUT', 'DELETE'].includes(method);
 
         for (let attempt = 0; attempt <= retryCount; attempt++) {
             try {
-                appLogger.info(`API请求: ${config.method || 'GET'} ${url} (尝试 ${attempt + 1}/${retryCount + 1})`);
+                appLogger.info(`API请求: ${method} ${url} (尝试 ${attempt + 1}/${retryCount + 1})`);
 
-                const response = await this._fetchWithTimeout(url, config, this.timeout);
+                const response = await this._fetchWithTimeout(url, config, config.timeout || this.timeout);
 
                 // 处理响应
                 let data;
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
                     data = await response.json();
                 } else {
                     data = await response.text();
                 }
 
                 if (!response.ok) {
-                    const error = new Error(data.message || data.error || `HTTP ${response.status}`);
+                    const message =
+                        typeof data === 'string'
+                            ? data
+                            : (data && (data.detail || data.message || data.error)) || `HTTP ${response.status}`;
+                    const error = new Error(typeof message === 'string' ? message : JSON.stringify(message));
                     error.status = response.status;
                     error.data = data;
                     throw error;
                 }
 
-                // 执行响应拦截器
                 return await this._runResponseInterceptors(data);
-
             } catch (error) {
                 lastError = error;
 
-                // 不重试的情况
-                if (error.status === 401 || error.status === 403 || error.status === 404) {
+                const status = error.status;
+                const nonRetryableStatus = [400, 401, 403, 404, 405, 409, 422].includes(status);
+                if (!retryableMethod || nonRetryableStatus) {
                     break;
                 }
 
-                // 等待后重试
                 if (attempt < retryCount) {
                     const delay = this.retryDelay * Math.pow(2, attempt);
                     appLogger.warn(`请求失败，${delay}ms后重试: ${error.message}`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                    await new Promise((resolve) => setTimeout(resolve, delay));
                 }
             }
         }
@@ -291,8 +324,14 @@ class APIClient {
             }
         }
 
-        // 构建查询字符串
-        const queryString = new URLSearchParams(params).toString();
+        // 构建查询字符串，过滤 undefined/null/空字符串，避免发送 "undefined"
+        const query = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                query.set(key, String(value));
+            }
+        });
+        const queryString = query.toString();
         const url = queryString ? `${endpoint}?${queryString}` : endpoint;
 
         const response = await this._request(url, {
@@ -312,17 +351,12 @@ class APIClient {
      * POST请求
      */
     async post(endpoint, data = {}, options = {}) {
-        const config = {
+        const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+        return this._request(endpoint, {
             method: 'POST',
-            body: data instanceof FormData ? data : JSON.stringify(data),
+            body: isFormData ? data : JSON.stringify(data),
             ...options
-        };
-
-        if (data instanceof FormData) {
-            delete config.headers['Content-Type'];
-        }
-
-        return this._request(endpoint, config);
+        });
     }
 
     /**
@@ -354,14 +388,16 @@ class APIClient {
 
         // 添加文件
         if (Array.isArray(files)) {
-            files.forEach(file => formData.append('files', file));
+            files.forEach((file) => formData.append('files', file));
         } else {
             formData.append('file', files);
         }
 
         // 添加额外数据
-        Object.entries(additionalData).forEach(([key, value]) => {
-            formData.append(key, typeof value === 'string' ? value : JSON.stringify(value));
+        Object.entries(additionalData || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                formData.append(key, typeof value === 'string' ? value : JSON.stringify(value));
+            }
         });
 
         return this._request(endpoint, {
@@ -377,17 +413,26 @@ class APIClient {
     setBaseURL(url) {
         this.baseURL = url;
         API_CONFIG.BASE_URL = url;
-        localStorage.setItem('api_base_url', url);
+        try {
+            localStorage.setItem('api_base_url', url);
+        } catch {
+            // ignore
+        }
+        this.cache.clear();
     }
 
     /**
      * 设置认证Token
      */
     setToken(token) {
-        if (token) {
-            localStorage.setItem('auth_token', token);
-        } else {
-            localStorage.removeItem('auth_token');
+        try {
+            if (token) {
+                localStorage.setItem('auth_token', token);
+            } else {
+                localStorage.removeItem('auth_token');
+            }
+        } catch {
+            // ignore
         }
     }
 
@@ -404,41 +449,93 @@ class APIClient {
  */
 const apiClient = new APIClient();
 
+function withQuery(endpoint, params) {
+    const query = new URLSearchParams();
+    Object.entries(params || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+            query.set(key, String(value));
+        }
+    });
+    const text = query.toString();
+    return text ? `${endpoint}?${text}` : endpoint;
+}
+
 /**
  * 图像管理API
  */
 export const imageAPI = {
     upload: (file, metadata) => apiClient.upload('/images/upload', file, metadata),
     uploadBatch: (files) => apiClient.upload('/images/upload/batch', files),
-    get: (imageId) => apiClient.get(`/images/${imageId}`),
-    delete: (imageId) => apiClient.delete(`/images/${imageId}`),
-    compress: (imageId, options) => apiClient.post(`/images/${imageId}/compress`, options)
+    list: (limit = 100, offset = 0) => apiClient.get('/images', { limit, offset }),
+    get: (imageId) => apiClient.get(`/images/${encodeURIComponent(imageId)}`),
+    delete: (imageId) => apiClient.delete(`/images/${encodeURIComponent(imageId)}`),
+    compress: (imageId, options = {}) =>
+        apiClient.post(withQuery(`/images/${encodeURIComponent(imageId)}/compress`, options))
 };
 
 /**
  * AI分析API
  */
 export const analysisAPI = {
-    analyze: (request) => apiClient.post('/analysis', request),
-    classify: (imageId, topK = 5) => apiClient.post(`/analysis/classify?image_id=${imageId}&top_k=${topK}`),
-    detect: (imageId, threshold = 0.3) => apiClient.post(`/analysis/detect?image_id=${imageId}&confidence_threshold=${threshold}`),
+    analyze: (request, options = {}) => apiClient.post('/analysis', request, { timeout: 60000, ...options }),
+    analyzeUrl: (request, options = {}) => apiClient.post('/analysis/url', request, { timeout: 60000, ...options }),
+    classify: (imageId, topK = 5) =>
+        apiClient.post(withQuery('/analysis/classify', { image_id: imageId, top_k: topK })),
+    detect: (imageId, threshold = 0.3) =>
+        apiClient.post(
+            withQuery('/analysis/detect', {
+                image_id: imageId,
+                confidence_threshold: threshold
+            })
+        ),
     caption: (imageId, language = 'zh', style = 'descriptive') =>
-        apiClient.post(`/analysis/caption?image_id=${imageId}&language=${language}&style=${style}`),
-    colors: (imageId, numColors = 5) => apiClient.post(`/analysis/colors?image_id=${imageId}&num_colors=${numColors}`),
-    tags: (imageId, maxTags = 10) => apiClient.post(`/analysis/tags?image_id=${imageId}&max_tags=${maxTags}`)
+        apiClient.post(
+            withQuery('/analysis/caption', {
+                image_id: imageId,
+                language,
+                style
+            })
+        ),
+    colors: (imageId, numColors = 5) =>
+        apiClient.post(
+            withQuery('/analysis/colors', {
+                image_id: imageId,
+                num_colors: numColors
+            })
+        ),
+    tags: (imageId, maxTags = 10) =>
+        apiClient.post(
+            withQuery('/analysis/tags', {
+                image_id: imageId,
+                max_tags: maxTags
+            })
+        )
 };
 
 /**
  * Prompt智能API
  */
 export const promptAPI = {
-    optimize: (request) => apiClient.post('/prompts/optimize', request),
-    translate: (prompt, targetLanguage = 'en') => apiClient.post('/prompts/translate', { prompt, target_language: targetLanguage }),
+    optimize: (request) =>
+        apiClient.post('/prompts/optimize', {
+            ...request,
+            // 后端枚举为小写，前端 UI 使用大写 key
+            style: request.style ? String(request.style).toLowerCase() : null
+        }),
+    translate: (prompt, targetLanguage = 'en') =>
+        apiClient.post(
+            withQuery('/prompts/translate', {
+                prompt,
+                target_language: targetLanguage
+            })
+        ),
     getTemplates: (category, style) => apiClient.get('/prompts/templates', { category, style }),
-    getTemplate: (templateId) => apiClient.get(`/prompts/templates/${templateId}`),
-    renderTemplate: (templateId, variables) => apiClient.post(`/prompts/templates/${templateId}/render`, variables),
-    generateNegative: (prompt, intensity = 'medium') => apiClient.post('/prompts/generate-negative', { prompt, intensity }),
-    analyze: (prompt) => apiClient.post('/prompts/analyze', { prompt }),
+    getTemplate: (templateId) => apiClient.get(`/prompts/templates/${encodeURIComponent(templateId)}`),
+    renderTemplate: (templateId, variables) =>
+        apiClient.post(`/prompts/templates/${encodeURIComponent(templateId)}/render`, variables),
+    generateNegative: (prompt, intensity = 'medium') =>
+        apiClient.post(withQuery('/prompts/generate-negative', { prompt, intensity })),
+    analyze: (prompt) => apiClient.post(withQuery('/prompts/analyze', { prompt })),
     getStyles: () => apiClient.get('/prompts/styles')
 };
 
@@ -449,9 +546,20 @@ export const multimodalAPI = {
     imageToText: (request) => apiClient.post('/multimodal/image-to-text', request),
     textToImage: (request) => apiClient.post('/multimodal/text-to-image', request),
     visualQA: (request) => apiClient.post('/multimodal/visual-qa', request),
-    styleTransfer: (request) => apiClient.post('/multimodal/style-transfer', request),
-    editImage: (imageId, editPrompt, maskArea) => apiClient.post('/multimodal/image-edit', { image_id: imageId, edit_prompt: editPrompt, mask_area: maskArea }),
-    getTaskStatus: (taskId) => apiClient.get(`/multimodal/tasks/${taskId}`)
+    styleTransfer: (request) =>
+        apiClient.post('/multimodal/style-transfer', {
+            ...request,
+            target_style: request.target_style ? String(request.target_style).toLowerCase() : request.target_style
+        }),
+    editImage: (imageId, editPrompt, maskArea) =>
+        apiClient.post(
+            withQuery('/multimodal/image-edit', {
+                image_id: imageId,
+                edit_prompt: editPrompt,
+                mask_area: maskArea
+            })
+        ),
+    getTaskStatus: (taskId) => apiClient.get(`/multimodal/tasks/${encodeURIComponent(taskId)}`)
 };
 
 /**

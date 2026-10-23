@@ -38,8 +38,15 @@ class GalleryRenderer {
      * @private
      */
     _bindEvents() {
+        eventManager.on('gallery:display-updated', (data) => {
+            const viewMode = data.viewMode || this.currentView;
+            this.currentView = viewMode;
+            this.render(data.displayedImages || [], { viewMode });
+        });
+
         eventManager.on('gallery:render-required', (data) => {
             galleryLogger.debug('收到渲染请求:', data);
+            this.currentView = data.viewMode || this.currentView;
         });
     }
 
@@ -78,7 +85,7 @@ class GalleryRenderer {
         }
 
         // 隐藏所有视图容器
-        [this.gridId, this.listId, this.masonryId].forEach(id => {
+        [this.gridId, this.listId, this.masonryId].forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.classList.add('hidden');
         });
@@ -172,21 +179,29 @@ class GalleryRenderer {
 
         // 加载指示器
         const loadingIndicator = document.createElement('div');
-        loadingIndicator.className = 'image-loading pulse-animation absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700';
+        loadingIndicator.className =
+            'image-loading pulse-animation absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-700';
         loadingIndicator.innerHTML = '<i class="fas fa-spinner fa-spin text-2xl text-gray-400" aria-hidden="true"></i>';
         container.appendChild(loadingIndicator);
 
         // 图片元素
         const img = document.createElement('img');
+        const displayUrl = image.thumbnailUrl || image.url;
         img.alt = StringUtils.escapeHtml(image.name || '');
         img.className = 'smart-crop lazy-image w-full h-full object-cover';
         img.loading = 'lazy';
+        img.decoding = 'async';
+        if (image.width && image.height) {
+            img.width = image.width;
+            img.height = image.height;
+        }
 
-        if (this.lazyLoading && image.url) {
-            img.dataset.src = image.url;
+        if (this.lazyLoading && displayUrl) {
+            img.dataset.src = displayUrl;
+            img.dataset.fullSrc = image.url || displayUrl;
             img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
-        } else if (image.url) {
-            img.src = image.url;
+        } else if (displayUrl) {
+            img.src = displayUrl;
         }
 
         img.onload = () => {
@@ -207,7 +222,8 @@ class GalleryRenderer {
 
         // AI分析覆盖层
         const overlay = document.createElement('div');
-        overlay.className = 'ai-analysis-overlay absolute inset-0 flex items-center justify-center flex-col opacity-0 transition-opacity duration-300';
+        overlay.className =
+            'ai-analysis-overlay absolute inset-0 flex items-center justify-center flex-col opacity-0 transition-opacity duration-300';
         overlay.innerHTML = `
             <svg class="ai-progress-ring w-16 h-16" viewBox="0 0 60 60">
                 <circle cx="30" cy="30" r="25" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
@@ -242,10 +258,11 @@ class GalleryRenderer {
         tagsContainer.className = 'tags flex flex-wrap gap-2 mt-2';
 
         if (image.aiTags && image.aiTags.length > 0) {
-            image.aiTags.slice(0, 3).forEach(tag => {
+            image.aiTags.slice(0, 3).forEach((tag) => {
                 const tagEl = document.createElement('span');
-                tagEl.className = 'tag text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-                tagEl.textContent = tag;
+                tagEl.className =
+                    'tag text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+                tagEl.textContent = typeof tag === 'string' ? tag : tag.label || '';
                 tagsContainer.appendChild(tagEl);
             });
         }
@@ -257,7 +274,8 @@ class GalleryRenderer {
         meta.className = 'flex items-center justify-between mt-2 text-xs text-gray-500 dark:text-gray-400';
 
         const sizeText = image.size ? this._formatFileSize(image.size) : '';
-        const dateText = image.uploadTime ? this._formatDate(image.uploadTime) : '';
+        const dateValue = image.uploadTime || image.timestamp;
+        const dateText = dateValue ? this._formatDate(dateValue) : '';
 
         meta.innerHTML = `
             <span>${sizeText}</span>
@@ -325,7 +343,7 @@ class GalleryRenderer {
             overlay.style.opacity = '1';
             const circle = overlay.querySelector('.progress');
             if (circle) {
-                const offset = 157 - (157 * progress / 100);
+                const offset = 157 - (157 * progress) / 100;
                 circle.style.strokeDashoffset = offset;
             }
         } else if (progress >= 100) {
@@ -349,9 +367,10 @@ class GalleryRenderer {
         if (!tagsContainer) return;
 
         tagsContainer.innerHTML = '';
-        tags.slice(0, 3).forEach(tag => {
+        tags.slice(0, 3).forEach((tag) => {
             const tagEl = document.createElement('span');
-            tagEl.className = 'tag text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+            tagEl.className =
+                'tag text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
             tagEl.textContent = tag;
             tagsContainer.appendChild(tagEl);
         });
@@ -361,7 +380,7 @@ class GalleryRenderer {
      * 清空渲染
      */
     clear() {
-        [this.gridId, this.listId, this.masonryId].forEach(id => {
+        [this.gridId, this.listId, this.masonryId].forEach((id) => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '';
         });

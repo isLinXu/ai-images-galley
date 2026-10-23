@@ -42,8 +42,8 @@ class SecurityManager {
         try {
             const response = await fetch('https://api.github.com/user', {
                 headers: {
-                    'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
+                    Authorization: `token ${token}`,
+                    Accept: 'application/vnd.github.v3+json'
                 }
             });
 
@@ -62,9 +62,10 @@ class SecurityManager {
             } else {
                 return {
                     valid: false,
-                    error: response.status === 401 ?
-                        ERROR_MESSAGES.INVALID_TOKEN :
-                        ERROR_MESSAGES.TOKEN_VERIFICATION_FAILED
+                    error:
+                        response.status === 401
+                            ? ERROR_MESSAGES.INVALID_TOKEN
+                            : ERROR_MESSAGES.TOKEN_VERIFICATION_FAILED
                 };
             }
         } catch (error) {
@@ -239,7 +240,7 @@ class SecurityManager {
             }
         }
 
-        expiredTokens.forEach(token => {
+        expiredTokens.forEach((token) => {
             this.sessionTokens.delete(token);
         });
 
@@ -368,21 +369,21 @@ class ActivityLogManager {
 
         // 按动作类型过滤
         if (filters.action) {
-            filteredLogs = filteredLogs.filter(log => log.action === filters.action);
+            filteredLogs = filteredLogs.filter((log) => log.action === filters.action);
         }
 
         // 按用户过滤
         if (filters.user) {
-            filteredLogs = filteredLogs.filter(log => log.user === filters.user);
+            filteredLogs = filteredLogs.filter((log) => log.user === filters.user);
         }
 
         // 按时间范围过滤
         if (filters.startTime) {
-            filteredLogs = filteredLogs.filter(log => log.timestamp >= filters.startTime);
+            filteredLogs = filteredLogs.filter((log) => log.timestamp >= filters.startTime);
         }
 
         if (filters.endTime) {
-            filteredLogs = filteredLogs.filter(log => log.timestamp <= filters.endTime);
+            filteredLogs = filteredLogs.filter((log) => log.timestamp <= filters.endTime);
         }
 
         // 分页
@@ -404,13 +405,13 @@ class ActivityLogManager {
 
         if (olderThan) {
             // 清除指定时间之前的日志
-            this.logs = this.logs.filter(log => log.timestamp > olderThan);
+            this.logs = this.logs.filter((log) => log.timestamp > olderThan);
         } else if (action) {
             // 清除指定动作的日志
-            this.logs = this.logs.filter(log => log.action !== action);
+            this.logs = this.logs.filter((log) => log.action !== action);
         } else if (user) {
             // 清除指定用户的日志
-            this.logs = this.logs.filter(log => log.user !== user);
+            this.logs = this.logs.filter((log) => log.user !== user);
         } else {
             // 清除所有日志
             this.logs = [];
@@ -450,7 +451,7 @@ class ActivityLogManager {
         if (logs.length === 0) return '';
 
         const headers = ['时间', '动作', '用户', 'IP地址', '用户代理', '详情'];
-        const rows = logs.map(log => [
+        const rows = logs.map((log) => [
             TimeUtils.formatDateTime(log.timestamp),
             log.action,
             log.user,
@@ -459,9 +460,7 @@ class ActivityLogManager {
             JSON.stringify(log.details)
         ]);
 
-        const csvContent = [headers, ...rows]
-            .map(row => row.map(cell => `"${cell}"`).join(','))
-            .join('\n');
+        const csvContent = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
 
         return csvContent;
     }
@@ -517,7 +516,7 @@ class ActivityLogManager {
         };
 
         // 统计各种动作的数量
-        this.logs.forEach(log => {
+        this.logs.forEach((log) => {
             stats.actionCounts[log.action] = (stats.actionCounts[log.action] || 0) + 1;
             stats.userCounts[log.user] = (stats.userCounts[log.user] || 0) + 1;
         });
@@ -779,10 +778,7 @@ class SessionManager {
     _showSessionWarning() {
         const remainingTime = TimeUtils.formatDuration(this.warningTime);
 
-        uiManager.tooltipManager.warning(
-            `会话即将在 ${remainingTime} 后过期，请保持活动状态`,
-            { duration: 10000 }
-        );
+        uiManager.tooltipManager.warning(`会话即将在 ${remainingTime} 后过期，请保持活动状态`, { duration: 10000 });
 
         eventManager.emit('admin:session-warning', {
             remainingTime: this.warningTime,
@@ -820,7 +816,7 @@ class SessionManager {
             this.updateActivity();
         };
 
-        events.forEach(event => {
+        events.forEach((event) => {
             document.addEventListener(event, this.activityHandler, true);
         });
     }
@@ -834,7 +830,7 @@ class SessionManager {
 
         const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
 
-        events.forEach(event => {
+        events.forEach((event) => {
             document.removeEventListener(event, this.activityHandler, true);
         });
 
@@ -873,6 +869,7 @@ class AdminManager {
 
         this.isAdminMode = false;
         this.currentAdmin = null;
+        this.authToken = null;
 
         this._bindEvents();
         this._loadAdminState();
@@ -919,13 +916,19 @@ class AdminManager {
             // 生成会话令牌
             const sessionToken = this.securityManager.generateSessionToken(validation.user);
 
-            // 设置管理员状态
+            // 设置管理员状态，并把 Token 保存在当前标签页会话中
             this.isAdminMode = true;
             this.currentAdmin = {
                 ...validation.user,
                 sessionToken,
                 loginTime: Date.now()
             };
+            this.authToken = token;
+            try {
+                sessionStorage.setItem('github_token', token);
+            } catch (error) {
+                console.warn('无法保存登录 Token:', error);
+            }
 
             // 保存到本地存储
             this._saveAdminState();
@@ -951,7 +954,6 @@ class AdminManager {
                 user: validation.user,
                 sessionToken
             };
-
         } catch (error) {
             console.error('管理员登录失败:', error);
             return {
@@ -962,12 +964,33 @@ class AdminManager {
     }
 
     /**
+     * 获取当前标签页的 GitHub Token（供上传器复用）
+     * @returns {string}
+     */
+    getAuthToken() {
+        if (this.authToken) return this.authToken;
+        try {
+            return sessionStorage.getItem('github_token') || '';
+        } catch {
+            return '';
+        }
+    }
+
+    /**
      * 管理员登出
      */
     logout() {
-        if (!this.isAdminMode) return;
-
+        const wasAdmin = this.isAdminMode;
         const user = this.currentAdmin?.login || 'unknown';
+
+        this.authToken = null;
+        try {
+            sessionStorage.removeItem('github_token');
+        } catch {
+            // ignore
+        }
+
+        if (!wasAdmin) return;
 
         // 撤销会话令牌
         if (this.currentAdmin?.sessionToken) {
@@ -1134,6 +1157,12 @@ class AdminManager {
      * @private
      */
     _clearAdminState() {
+        this.authToken = null;
+        try {
+            sessionStorage.removeItem('github_token');
+        } catch {
+            // ignore
+        }
         try {
             storageManager.specializedStorage.adminData.remove('adminState');
         } catch (error) {
@@ -1173,12 +1202,6 @@ class AdminManager {
 // 创建全局管理员管理器实例
 const adminManager = new AdminManager();
 
-export {
-    SecurityManager,
-    ActivityLogManager,
-    PermissionManager,
-    SessionManager,
-    AdminManager
-};
+export { SecurityManager, ActivityLogManager, PermissionManager, SessionManager, AdminManager };
 
 export default adminManager;

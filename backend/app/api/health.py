@@ -7,9 +7,16 @@ from datetime import datetime
 import platform
 import psutil
 
+from app.core.config import settings
 from app.models.schemas import HealthStatus, ResponseModel
 
 router = APIRouter()
+
+
+def _ai_mode() -> str:
+    if (settings.AI_PROVIDER or "auto").lower() == "mock":
+        return "mock"
+    return "openai" if settings.OPENAI_API_KEY else "mock"
 
 
 @router.get("/health", response_model=ResponseModel)
@@ -22,8 +29,8 @@ async def health_check():
             timestamp=datetime.utcnow(),
             services={
                 "api": "running",
-                "storage": "available",
-                "ai_engine": "ready"
+                "storage": "local-filesystem",
+                "ai_engine": _ai_mode()
             }
         )
     )
@@ -42,8 +49,8 @@ async def detailed_health_check():
             timestamp=datetime.utcnow(),
             services={
                 "api": "running",
-                "storage": "available",
-                "ai_engine": "ready"
+                "storage": "local-filesystem",
+                "ai_engine": _ai_mode()
             },
             system_info={
                 "platform": platform.platform(),

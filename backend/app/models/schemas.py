@@ -3,7 +3,7 @@ Pydantic数据模型
 """
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from enum import Enum
 
@@ -77,6 +77,14 @@ class AnalysisRequest(BaseModel):
     language: str = "zh"
     confidence_threshold: float = Field(default=0.3, ge=0, le=1)
 
+class AnalyzeUrlRequest(BaseModel):
+    """通过公开图片 URL 进行 AI 分析"""
+    image_url: str = Field(..., min_length=8, max_length=2000)
+    analysis_types: List[AnalysisType] = [AnalysisType.ALL]
+    language: str = "zh"
+    confidence_threshold: float = Field(default=0.3, ge=0, le=1)
+
+
 
 class ClassificationResult(BaseModel):
     """分类结果"""
@@ -112,6 +120,8 @@ class ColorInfo(BaseModel):
 
 class AnalysisResult(BaseModel):
     """完整分析结果"""
+    model_config = ConfigDict(protected_namespaces=())
+
     image_id: str
     classifications: List[ClassificationResult] = []
     detections: List[DetectionResult] = []
@@ -121,6 +131,7 @@ class AnalysisResult(BaseModel):
     scene_type: Optional[str] = None
     processing_time: float
     model_version: str
+    provider: str = "mock"
 
 
 # ==================== Prompt相关模型 ====================
@@ -161,6 +172,7 @@ class PromptOptimizeResponse(BaseModel):
     parameter_suggestions: Dict[str, Any] = {}
     tags: List[str] = []
     explanation: Optional[str] = None
+    provider: str = "rules"
 
 
 class PromptTemplate(BaseModel):
@@ -204,6 +216,7 @@ class ImageToTextResponse(BaseModel):
     task: str
     word_count: int
     confidence: float
+    provider: str = "mock"
 
 
 class TextToImageRequest(BaseModel):
@@ -224,6 +237,7 @@ class TextToImageResponse(BaseModel):
     images: List[Dict[str, Any]] = []
     prompt_used: str
     parameters: Dict[str, Any] = {}
+    provider: str = "mock"
 
 
 class VisualQARequest(BaseModel):
@@ -242,6 +256,7 @@ class VisualQAResponse(BaseModel):
     answer_en: Optional[str] = None
     confidence: float
     reasoning: Optional[str] = None
+    provider: str = "mock"
 
 
 class StyleTransferRequest(BaseModel):

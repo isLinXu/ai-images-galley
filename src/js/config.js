@@ -1,7 +1,26 @@
 /**
  * AI智能相册系统 - 配置模块
  * 包含系统配置、常量定义和环境变量
+ *
+ * 说明：所有模块共享这一份配置。新增配置项时必须同步检查调用方，
+ * 避免出现 `CONFIG.X.Y is undefined` 导致的运行时崩溃。
  */
+
+function readStoredApiBaseUrl() {
+    try {
+        return localStorage.getItem('api_base_url') || 'http://localhost:8000/api/v1';
+    } catch {
+        return 'http://localhost:8000/api/v1';
+    }
+}
+
+function hasConfiguredApiBaseUrl() {
+    try {
+        return Boolean(localStorage.getItem('api_base_url'));
+    } catch {
+        return false;
+    }
+}
 
 export const CONFIG = {
     // 安全配置
@@ -9,11 +28,15 @@ export const CONFIG = {
         MAX_LOGIN_ATTEMPTS: 5,
         LOGIN_COOLDOWN: 300000, // 5分钟
         SESSION_TIMEOUT: 3600000, // 1小时
+        SESSION_WARNING_TIME: 300000, // 提前5分钟提醒
         TOKEN_MIN_LENGTH: 20
     },
 
     // AI模型配置
     AI: {
+        // 模块化预览版默认关闭模型加载：当前没有 UI 消费分析结果，
+        // 且 TensorFlow.js 在部分 CSP 环境下需要 unsafe-eval。
+        ENABLED: false,
         ANALYSIS_QUEUE_SIZE: 10,
         WORKER_COUNT: 2,
         CONFIDENCE_THRESHOLD: 0.3,
@@ -22,10 +45,15 @@ export const CONFIG = {
 
     // 图片配置
     IMAGE: {
-        MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+        MAX_FILE_SIZE: 15 * 1024 * 1024, // 15MB
         SUPPORTED_FORMATS: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
         THUMBNAIL_SIZE: 240,
-        COMPRESSION_QUALITY: 0.8
+        COMPRESSION_QUALITY: 0.8,
+        MAX_WIDTH: 1920,
+        MAX_HEIGHT: 1080,
+        CONCURRENT_LOADS: 3,
+        MAX_CACHE_SIZE: 100,
+        MAX_THUMBNAIL_CACHE_SIZE: 100
     },
 
     // UI配置
@@ -33,7 +61,45 @@ export const CONFIG = {
         TOOLTIP_DURATION: 3000,
         ANIMATION_DURATION: 300,
         SEARCH_DEBOUNCE: 300,
-        PRELOAD_COUNT: 5
+        PRELOAD_COUNT: 5,
+        FILTERS: {},
+        DEFAULT_SORT_FIELD: 'uploadTime',
+        DEFAULT_SORT_DIRECTION: 'desc',
+        SORT_OPTIONS: ['uploadTime', 'name', 'size', 'dimensions', 'confidence', 'aiTagsCount'],
+        DEFAULT_ITEMS_PER_PAGE: 20,
+        DEFAULT_VIEW_MODE: 'grid',
+        VIEW_MODES: ['grid', 'list', 'masonry'],
+        DEFAULT_GRID_COLUMNS: 4,
+        BREAKPOINTS: {
+            sm: 640,
+            md: 768,
+            lg: 1024,
+            xl: 1280,
+            xxl: 1536
+        }
+    },
+
+    // 搜索配置
+    SEARCH: {
+        MAX_HISTORY_SIZE: 20,
+        WEIGHTS: {
+            filename: 10,
+            aiTags: 5,
+            customTags: 8,
+            notes: 3,
+            aiDescription: 4,
+            exifData: 1
+        }
+    },
+
+    // GitHub 配置（经典版与模块化版共享的图片仓库）
+    GITHUB: {
+        OWNER: 'isLinXu',
+        REPO: 'ai-images-galley',
+        BRANCH: 'main',
+        API_BASE: 'https://api.github.com',
+        IMAGE_PATH: 'images',
+        RETRY_COUNT: 3
     },
 
     // 存储配置
@@ -45,7 +111,9 @@ export const CONFIG = {
 
     // 后端API配置
     API: {
-        BASE_URL: localStorage.getItem('api_base_url') || 'http://localhost:8000/api/v1',
+        // 默认不请求后端；显式设置 localStorage.api_base_url 后才启用真实后端联调。
+        ENABLED: hasConfiguredApiBaseUrl(),
+        BASE_URL: readStoredApiBaseUrl(),
         TIMEOUT: 30000,
         RETRY_COUNT: 3,
         RETRY_DELAY: 1000,
@@ -78,32 +146,45 @@ export const CONFIG = {
         FALLBACK_TO_MAIN_THREAD: true
     },
 
-    // 主题配置
-    THEMES: [
-        {
-            name: 'default',
+    // 管理员配置
+    ADMIN: {
+        MAX_ACTIVITY_LOGS: 100,
+        LOG_TYPES: [
+            'LOGIN',
+            'LOGOUT',
+            'SESSION_TIMEOUT',
+            'UPLOAD_IMAGES',
+            'DELETE_IMAGE',
+            'UPDATE_IMAGE',
+            'CLEAR_LOGS'
+        ],
+        PERMISSIONS: ['admin', 'upload', 'delete', 'edit', 'view_logs', 'manage_users']
+    },
+
+    // 主题配置（以主题名为键，ThemeManager 依赖这一结构）
+    THEMES: {
+        light: {
             primary: '#3B82F6',
             secondary: '#10B981',
             accent: '#F59E0B'
         },
-        {
-            name: 'dark',
+        dark: {
             primary: '#1E40AF',
             secondary: '#065F46',
             accent: '#B45309'
         },
-        {
-            name: 'purple',
+        purple: {
             primary: '#7C3AED',
             secondary: '#059669',
             accent: '#DC2626'
         }
-    ]
+    }
 };
 
 // 正则表达式模式
 export const PATTERNS = {
-    GITHUB_TOKEN: /^gh[ps]_[a-zA-Z0-9]{36,}$/,
+    // classic PAT（ghp_/gho_/ghu_/ghs_/ghr_）与 fine-grained PAT（github_pat_）
+    GITHUB_TOKEN: /^(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})$/,
     GITHUB_CLASSIC_TOKEN: /^[a-f0-9]{40}$/,
     EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     URL: /^https?:\/\/.+/
@@ -113,12 +194,16 @@ export const PATTERNS = {
 export const ERROR_MESSAGES = {
     TOKEN_INVALID: 'Token格式不正确，请确保使用有效的GitHub Token',
     TOKEN_TOO_SHORT: 'Token长度不足，请检查是否完整',
+    INVALID_TOKEN_FORMAT: 'Token格式不正确，请确保使用有效的GitHub Token',
+    TOKEN_VERIFICATION_FAILED: 'Token验证失败，请检查Token权限或网络连接',
+    NETWORK_ERROR: '网络连接失败，请稍后重试',
+    LOGIN_FAILED: '登录失败，请稍后重试',
     LOGIN_COOLDOWN: '登录尝试过多，请等待 {minutes} 分钟后重试',
     SESSION_EXPIRED: '会话已过期，请重新登录',
     UPLOAD_FAILED: '上传失败，请检查网络连接和Token权限',
     ANALYSIS_FAILED: 'AI分析失败，请稍后重试',
     MODEL_LOAD_FAILED: '模型加载失败，使用基础分析功能',
-    FILE_TOO_LARGE: '文件过大，请选择小于10MB的图片',
+    FILE_TOO_LARGE: '文件过大，请选择小于15MB的图片',
     UNSUPPORTED_FORMAT: '不支持的文件格式'
 };
 
@@ -150,6 +235,7 @@ export const STORAGE_KEYS = {
 // 事件类型
 export const EVENT_TYPES = {
     IMAGE_LOADED: 'image:loaded',
+    IMAGE_LOADING: 'image:loading',
     IMAGE_ANALYZED: 'image:analyzed',
     ADMIN_LOGIN: 'admin:login',
     ADMIN_LOGOUT: 'admin:logout',

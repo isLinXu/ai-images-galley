@@ -80,6 +80,15 @@ export const ValidationUtils = {
     },
 
     /**
+     * 向后兼容别名：只返回布尔值
+     * @param {string} token - GitHub Token
+     * @returns {boolean}
+     */
+    isValidGitHubToken(token) {
+        return this.validateGitHubToken(token).valid;
+    },
+
+    /**
      * 验证文件类型
      * @param {File} file - 文件对象
      * @returns {Object} 验证结果
@@ -126,10 +135,37 @@ export const ValidationUtils = {
 export const StringUtils = {
     /**
      * 生成唯一ID
+     * @param {number} length - 可选长度；>0 时使用 Web Crypto 生成随机字符串
      * @returns {string} 唯一ID
      */
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    generateId(length = 0) {
+        if (length > 0) {
+            try {
+                const bytes = new Uint8Array(Math.ceil(length / 2));
+                crypto.getRandomValues(bytes);
+                return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+                    .join('')
+                    .slice(0, length);
+            } catch {
+                // 非安全上下文下回退到时间戳 + 随机数
+            }
+        }
+        return Date.now().toString(36) + Math.random().toString(36).slice(2);
+    },
+
+    /**
+     * 计算字符串的短哈希（FNV-1a），用于缓存键与客户端标识
+     * @param {string} str - 原字符串
+     * @returns {string} 哈希字符串
+     */
+    hash(str) {
+        let hash = 0x811c9dc5;
+        const text = String(str ?? '');
+        for (let i = 0; i < text.length; i++) {
+            hash ^= text.charCodeAt(i);
+            hash = Math.imul(hash, 0x01000193);
+        }
+        return (hash >>> 0).toString(36);
     },
 
     /**
@@ -150,7 +186,7 @@ export const StringUtils = {
      * @returns {string} 驼峰命名字符串
      */
     toCamelCase(str) {
-        return str.replace(/[-_\s]+(.)?/g, (_, c) => c ? c.toUpperCase() : '');
+        return str.replace(/[-_\s]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''));
     },
 
     /**
@@ -198,7 +234,7 @@ export const ArrayUtils = {
     unique(arr, key = null) {
         if (!key) return [...new Set(arr)];
         const seen = new Set();
-        return arr.filter(item => {
+        return arr.filter((item) => {
             const value = item[key];
             if (seen.has(value)) return false;
             seen.add(value);
@@ -267,7 +303,7 @@ export const ObjectUtils = {
     deepClone(obj) {
         if (obj === null || typeof obj !== 'object') return obj;
         if (obj instanceof Date) return new Date(obj.getTime());
-        if (obj instanceof Array) return obj.map(item => this.deepClone(item));
+        if (obj instanceof Array) return obj.map((item) => this.deepClone(item));
         if (typeof obj === 'object') {
             const cloned = {};
             for (const key in obj) {
@@ -571,7 +607,7 @@ export const AsyncUtils = {
      * @returns {Promise} Promise对象
      */
     delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+        return new Promise((resolve) => setTimeout(resolve, ms));
     },
 
     /**
@@ -602,9 +638,7 @@ export const AsyncUtils = {
     timeout(promise, timeout) {
         return Promise.race([
             promise,
-            new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Timeout')), timeout)
-            )
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), timeout))
         ]);
     }
 };
@@ -645,7 +679,7 @@ export const MathUtils = {
      * @returns {number} 映射后的数值
      */
     map(value, inMin, inMax, outMin, outMax) {
-        return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+        return ((value - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin;
     },
 
     /**
@@ -817,7 +851,8 @@ export class LazyLoader {
         this.selector = options.selector || '.lazy-image';
         this.rootMargin = options.rootMargin || '200px';
         this.threshold = options.threshold || 0.01;
-        this.placeholder = options.placeholder || 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+        this.placeholder =
+            options.placeholder || 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
         this.loadedClass = options.loadedClass || 'loaded';
         this.observer = null;
         this._init();
@@ -833,16 +868,19 @@ export class LazyLoader {
             return;
         }
 
-        this.observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    this._loadImage(entry.target);
-                }
-            });
-        }, {
-            rootMargin: this.rootMargin,
-            threshold: this.threshold
-        });
+        this.observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        this._loadImage(entry.target);
+                    }
+                });
+            },
+            {
+                rootMargin: this.rootMargin,
+                threshold: this.threshold
+            }
+        );
 
         // 观察当前已有的图片
         this.observeAll();
@@ -878,7 +916,7 @@ export class LazyLoader {
      * @private
      */
     _loadAllImages() {
-        document.querySelectorAll(this.selector).forEach(img => {
+        document.querySelectorAll(this.selector).forEach((img) => {
             this._loadImage(img);
         });
     }
@@ -888,7 +926,7 @@ export class LazyLoader {
      */
     observeAll() {
         if (!this.observer) return;
-        document.querySelectorAll(this.selector).forEach(img => {
+        document.querySelectorAll(this.selector).forEach((img) => {
             this.observer.observe(img);
         });
     }

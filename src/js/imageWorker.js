@@ -140,8 +140,8 @@ async function handleColorAnalysis(payload, taskId) {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(bitmap, 0, 0, width, height);
         
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const pixels = imageData.data;
+        const pixelsData = ctx.getImageData(0, 0, width, height);
+        const pixels = pixelsData.data;
         
         // 收集颜色
         const colorMap = new Map();
@@ -319,7 +319,7 @@ class ImageProcessingWorkerManager {
     _handleError(error) {
         console.error('Worker错误:', error);
         // 拒绝所有待处理任务
-        this.pendingTasks.forEach(task => {
+        this.pendingTasks.forEach((task) => {
             task.reject(error);
         });
         this.pendingTasks.clear();
@@ -353,13 +353,17 @@ class ImageProcessingWorkerManager {
             return this._compressInMainThread(file, options);
         }
 
-        return this._postTask('compress', {
-            imageData: arrayBuffer,
-            maxWidth: options.maxWidth || 1920,
-            maxHeight: options.maxHeight || 1080,
-            quality: options.quality || 0.85,
-            format: options.format || file.type || 'image/jpeg'
-        }, options.onProgress);
+        return this._postTask(
+            'compress',
+            {
+                imageData: arrayBuffer,
+                maxWidth: options.maxWidth || 1920,
+                maxHeight: options.maxHeight || 1080,
+                quality: options.quality || 0.85,
+                format: options.format || file.type || 'image/jpeg'
+            },
+            options.onProgress
+        );
     }
 
     /**
@@ -409,10 +413,14 @@ class ImageProcessingWorkerManager {
      * 批量处理
      */
     async batchProcess(items, operation, onProgress = null) {
-        return this._postTask('batchProcess', {
-            items,
-            operation
-        }, onProgress);
+        return this._postTask(
+            'batchProcess',
+            {
+                items,
+                operation
+            },
+            onProgress
+        );
     }
 
     /**
@@ -456,20 +464,24 @@ class ImageProcessingWorkerManager {
                 canvas.height = Math.round(height);
                 ctx.drawImage(img, 0, 0, width, height);
 
-                canvas.toBlob((blob) => {
-                    URL.revokeObjectURL(url);
-                    if (blob) {
-                        resolve({
-                            data: blob,
-                            width: Math.round(width),
-                            height: Math.round(height),
-                            size: blob.size,
-                            format: options.format || file.type
-                        });
-                    } else {
-                        reject(new Error('压缩失败'));
-                    }
-                }, options.format || file.type, options.quality || 0.85);
+                canvas.toBlob(
+                    (blob) => {
+                        URL.revokeObjectURL(url);
+                        if (blob) {
+                            resolve({
+                                data: blob,
+                                width: Math.round(width),
+                                height: Math.round(height),
+                                size: blob.size,
+                                format: options.format || file.type
+                            });
+                        } else {
+                            reject(new Error('压缩失败'));
+                        }
+                    },
+                    options.format || file.type,
+                    options.quality || 0.85
+                );
             };
 
             img.onerror = () => {
@@ -508,18 +520,22 @@ class ImageProcessingWorkerManager {
                 canvas.height = Math.round(height);
                 ctx.drawImage(img, 0, 0, width, height);
 
-                canvas.toBlob((blob) => {
-                    URL.revokeObjectURL(url);
-                    if (blob) {
-                        resolve({
-                            data: blob,
-                            width: Math.round(width),
-                            height: Math.round(height)
-                        });
-                    } else {
-                        reject(new Error('缩略图生成失败'));
-                    }
-                }, 'image/jpeg', 0.8);
+                canvas.toBlob(
+                    (blob) => {
+                        URL.revokeObjectURL(url);
+                        if (blob) {
+                            resolve({
+                                data: blob,
+                                width: Math.round(width),
+                                height: Math.round(height)
+                            });
+                        } else {
+                            reject(new Error('缩略图生成失败'));
+                        }
+                    },
+                    'image/jpeg',
+                    0.8
+                );
             };
 
             img.onerror = () => {
@@ -567,7 +583,7 @@ class ImageProcessingWorkerManager {
                 const colors = sortedColors.map(([rgb, count]) => {
                     const [r, g, b] = rgb.split(',').map(Number);
                     return {
-                        hex: `#${[r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')}`,
+                        hex: `#${[r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('')}`,
                         rgb: [r, g, b],
                         percentage: Math.round((count / totalPixels) * 1000) / 10
                     };
