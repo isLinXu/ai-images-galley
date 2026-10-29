@@ -8,6 +8,7 @@ import eventManager from './eventManager.js';
 import storageManager from './storageManager.js';
 import imageManager from './imageManager.js';
 import imageSource from './imageSource.js';
+import aiResultStore from './aiResultStore.js';
 import uiManager from './uiManager.js';
 import { galleryLogger } from './logger.js';
 
@@ -1094,7 +1095,7 @@ class GalleryManager {
             ]);
 
             const localImages = cachedLocalImages.map((image) => this._mapLocalImage(image));
-            this.images = this._mergeImages(sourceImages, localImages);
+            this.images = aiResultStore.apply(this._mergeImages(sourceImages, localImages));
             this.filteredImages = null;
 
             this._updateDisplayedImages();

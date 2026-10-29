@@ -5,9 +5,10 @@
 - ✅ 启动、图片列表、搜索、排序、分页、网格/列表/瀑布流切换
 - ✅ 图片详情模态框、主题切换、管理员登录表单
 - ✅ 图片源降级：GitHub Contents API → `images/manifest.json` → 目录索引
-- ✅ 管理员登录后通过 GitHub Contents API 持久化上传（浏览器端压缩为 JPEG）
-- ✅ AI 分析标签页：调用后端视觉模型（需启动后端并配置 API 地址）
-- ⏸ Prompt/多模态 UI 尚未接入
+- ✅ 管理员登录后通过 GitHub Contents API 持久化上传（JPEG + 自动 WebP 缩略图）
+- ✅ AI 分析标签页：调用后端视觉模型，真实结果写入卡片并缓存到 localStorage（mock 只展示不落卡片）
+- ✅ Prompt 优化 UI：无后端时本地规则，有后端时调用真实模型
+- ⏸ 多模态 UI（图像转文本/视觉问答）尚未接入
 - ⏸ 默认不请求后端；未配置时 AI 标签页只显示配置提示
 
 > 生产使用请优先选择 `index.html`。模块化版用于验证架构和逐步迁移。
@@ -30,7 +31,8 @@ src/js/
 ├── eventManager.js      # 发布-订阅事件总线
 ├── storageManager.js    # localStorage/sessionStorage/内存适配器
 ├── imageSource.js       # 图片来源：GitHub API / manifest / 目录索引
-├── uploader.js          # 模块化版上传：压缩、sha 覆盖、GitHub Contents API
+├── uploader.js          # 模块化版上传：压缩、sha 覆盖、缩略图、GitHub Contents API
+├── aiResultStore.js     # AI 结果本地缓存，刷新后恢复卡片标签
 ├── imageManager.js      # 图片加载、元数据、缩略图、内存缓存
 ├── galleryManager.js    # 搜索、过滤、排序、分页、视图
 ├── galleryRenderer.js   # 网格/列表/瀑布流 DOM 渲染
@@ -53,7 +55,9 @@ src/js/
 4. `galleryRenderer` 渲染 → 发 `gallery:rendered`
 5. `app` 触发 `LazyLoader.observeAll()`，并同步分页/计数 UI
 6. 上传：`uploader.uploadFiles()` → 压缩 → GitHub Contents API → `imageSource.invalidate()` → 重新拉取
-7. AI：详情页标签页 → `analysisAPI.analyzeUrl()` → 后端视觉模型（或 mock）→ 更新标签/描述/检测对象
+7. AI：详情页标签页 → `analysisAPI.analyzeUrl()` → 后端视觉模型（或 mock）→ 更新标签/描述/检测对象 → 写入卡片与本地缓存
+8. Prompt：`promptEngine.optimize()` → 后端模型或本地规则 → 展示优化结果/负面 Prompt/标签
+9. 上传缩略图：浏览器生成 640px WebP → `images/thumbnails/` → 卡片优先使用缩略图
 
 ## 后端联调
 
@@ -85,11 +89,10 @@ URL 分析只允许配置中的 `ALLOWED_IMAGE_HOSTS`；如果前端部署在其
 
 ## 已知缺口
 
-- AI 结果目前只展示在详情模态框，尚未写入卡片层。
-- Prompt/多模态引擎没有对应 UI。
-- `imageWorker.js` 未接入图片管线。
+- 多模态 UI（图像转文本/视觉问答）尚未接入。
+- `imageWorker.js` 未接入图片管线（缩略图使用主线程 Canvas）。
 - 后端风格迁移/图像编辑仍是 mock；图像分析/Prompt/多模态在配置 Key 后为真实模型。
-- 新上传图片不会自动生成 WebP 缩略图，需要运行 `npm run generate:thumbnails`。
+- 经典版上传或手动新增图片仍不会自动生成 WebP 缩略图，需要运行 `npm run generate:thumbnails`。
 
 ## 已知修复记录
 

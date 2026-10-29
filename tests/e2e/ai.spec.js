@@ -79,4 +79,11 @@ test('模块化版通过后端 AI 分析图片', async ({ page }) => {
     expect(analysisRequest).not.toBeNull();
     expect(analysisRequest.image_url).toContain('/images/');
     expect(analysisRequest.language).toBe('zh');
+
+    // 分析结果应写回卡片，并在刷新后从本地缓存恢复。
+    await page.locator('#image-modal .modal-close').click();
+    await expect(page.locator('#image-grid .image-card').first().locator('.tag').first()).toContainText('人物');
+
+    await page.reload();
+    await expect(page.locator('#image-grid .image-card').first().locator('.tag').first()).toContainText('人物');
 });

@@ -210,6 +210,12 @@ class GalleryRenderer {
         };
 
         img.onerror = () => {
+            // 缩略图可能尚未生成（例如仓库手动新增图片），回退到原图一次。
+            if (image.thumbnailUrl && image.url && displayUrl !== image.url && !img.dataset.thumbnailFallback) {
+                img.dataset.thumbnailFallback = '1';
+                img.src = image.url;
+                return;
+            }
             loadingIndicator.innerHTML = `
                 <div class="text-center text-red-500">
                     <i class="fas fa-exclamation-triangle text-2xl" aria-hidden="true"></i>

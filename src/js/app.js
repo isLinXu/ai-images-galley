@@ -13,6 +13,7 @@ import aiEngine from './aiEngine.js';
 import galleryManager from './galleryManager.js';
 import galleryRenderer from './galleryRenderer.js';
 import adminManager from './adminManager.js';
+import aiResultStore from './aiResultStore.js';
 import imageUploader from './uploader.js';
 import appLogger from './logger.js';
 import { apiClient, analysisAPI } from './apiClient.js';
@@ -967,6 +968,91 @@ class App {
             });
         }
 
+        // Prompt 优化器
+        const promptButton = document.querySelector('#prompt-button');
+        const promptModal = document.querySelector('#prompt-modal');
+        if (promptButton && promptModal) {
+            promptButton.addEventListener('click', () => {
+                uiManager.modalManager.show('prompt-modal');
+            });
+        }
+
+        const promptForm = document.querySelector('#prompt-form');
+        if (promptForm) {
+            promptForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const input = document.querySelector('#prompt-input');
+                const status = document.querySelector('#prompt-status');
+                const submit = document.querySelector('#prompt-submit');
+                const output = document.querySelector('#prompt-output');
+                const negativeOutput = document.querySelector('#prompt-negative-output');
+                const tagsContainer = document.querySelector('#prompt-tags');
+                const explanation = document.querySelector('#prompt-explanation');
+                const prompt = input ? input.value.trim() : '';
+
+                if (!prompt) {
+                    if (status) status.textContent = '请输入 Prompt';
+                    return;
+                }
+
+                if (submit) submit.disabled = true;
+                if (status) status.textContent = '优化中...';
+                try {
+                    const result = await promptEngine.optimize(prompt, {
+                        style: document.querySelector('#prompt-style')?.value || null,
+                        targetModel: document.querySelector('#prompt-model')?.value || 'sdxl',
+                        language: document.querySelector('#prompt-language')?.value || 'zh',
+                        enhanceDetails: Boolean(document.querySelector('#prompt-enhance')?.checked),
+                        addNegativePrompt: Boolean(document.querySelector('#prompt-negative')?.checked),
+                        aspectRatio: '1:1'
+                    });
+
+                    if (output) output.textContent = result.optimized_prompt || '—';
+                    if (negativeOutput) negativeOutput.textContent = result.negative_prompt || '—';
+                    if (tagsContainer) {
+                        tagsContainer.innerHTML = '';
+                        (result.tags || []).slice(0, 12).forEach((tag) => {
+                            const chip = document.createElement('span');
+                            chip.className = 'tag-item text-sm px-2 py-1 rounded-full';
+                            chip.textContent = String(tag);
+                            tagsContainer.appendChild(chip);
+                        });
+                    }
+                    if (explanation) {
+                        explanation.textContent = result.explanation || '';
+                    }
+                    if (status) {
+                        let providerLabel = '完成';
+                        if (result.provider === 'openai') {
+                            providerLabel = '真实模型';
+                        } else if (result.provider === 'local') {
+                            providerLabel = '本地规则';
+                        }
+                        status.textContent = `优化完成（${providerLabel}）`;
+                    }
+                } catch (error) {
+                    if (status) status.textContent = `优化失败：${error.message}`;
+                } finally {
+                    if (submit) submit.disabled = false;
+                }
+            });
+        }
+
+        const copyPrompt = document.querySelector('#copy-prompt');
+        if (copyPrompt) {
+            copyPrompt.addEventListener('click', async () => {
+                const output = document.querySelector('#prompt-output');
+                const text = output ? output.textContent : '';
+                if (!text || text === '等待优化...') return;
+                try {
+                    await navigator.clipboard.writeText(text);
+                    uiManager.tooltipManager.success('Prompt 已复制');
+                } catch {
+                    uiManager.tooltipManager.warning('复制失败，请手动选择文本');
+                }
+            });
+        }
+
         // 管理员登录
         const adminButton = document.querySelector('#admin-button');
         if (adminButton) {
@@ -1310,15 +1396,31 @@ class App {
                 empty.className = 'text-sm text-gray-500';
                 empty.textContent = '暂无检测结果';
                 objects.appendChild(empty);
+            } else {
+                detections.slice(0, 8).forEach((item) => {
+                    const line = document.createElement('p');
+                    line.className = 'text-sm text-gray-700 dark:text-gray-300';
+                    const label = item.label_zh || item.label || '对象';
+                    const confidence = Math.round((Number(item.confidence) || 0) * 100);
+                    line.textContent = `${label} · ${confidence}%`;
+                    objects.appendChild(line);
+                });
             }
         }
 
-        setText(
-            '#ai-status',
-            CONFIG.API.ENABLED
-                ? '点击「AI分析」或「重新分析」调用后端视觉模型。'
-                : 'AI 分析需要后端 API：请先启动 backend 并设置 localStorage.api_base_url 后刷新。'
-        );
+        if (image.aiAnalyzed) {
+            setText(
+                '#ai-status',
+                image.aiProvider === 'openai' ? '已加载缓存：真实模型分析结果。' : '已加载缓存：演示数据结果。'
+            );
+        } else {
+            setText(
+                '#ai-status',
+                CONFIG.API.ENABLED
+                    ? '点击「AI分析」或「重新分析」调用后端视觉模型。'
+                    : 'AI 分析需要后端 API：请先启动 backend 并设置 localStorage.api_base_url 后刷新。'
+            );
+        }
 
         uiManager.modalManager.show('image-modal');
     }
@@ -1423,10 +1525,31 @@ class App {
                 }
             }
 
-            image.aiTags = tags;
-            image.aiDescription = caption;
-            image.aiAnalyzed = true;
-            image.detections = detections;
+            const provider = data.provider || 'unknown';
+            // 只把真实模型结果写到卡片与缓存；mock 仅在当前弹窗展示，避免误导。
+            if (provider === 'openai') {
+                image.aiTags = tags;
+                image.aiDescription = caption;
+                image.aiAnalyzed = true;
+                image.aiProvider = provider;
+                image.detections = detections;
+
+                aiResultStore.save(image, {
+                    tags,
+                    description: caption,
+                    detections,
+                    provider,
+                    modelVersion: data.model_version
+                });
+                galleryManager.updateImage(image.id, {
+                    aiTags: tags,
+                    aiDescription: caption,
+                    detections,
+                    aiAnalyzed: true,
+                    aiProvider: provider
+                });
+            }
+
             setStatus(
                 data.provider === 'openai'
                     ? `真实模型分析完成（${data.model_version || 'vision'}）`

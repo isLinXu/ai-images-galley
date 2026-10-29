@@ -156,10 +156,17 @@ class ImageUploader {
                 if (result.skipped) {
                     skipped.push(targetName);
                 } else {
+                    let thumbnailUrl = null;
+                    try {
+                        thumbnailUrl = await this._uploadThumbnail(uploadFile, targetName, token);
+                    } catch (error) {
+                        appLogger.warn('缩略图上传失败，卡片将回退使用原图:', error.message);
+                    }
                     uploaded.push({
                         id: targetName,
                         name: targetName,
                         url: `images/${encodeURIComponent(targetName)}`,
+                        thumbnailUrl,
                         size: uploadFile.size,
                         timestamp: Date.now(),
                         loadMethod: 'GitHub Upload'
@@ -178,10 +185,29 @@ class ImageUploader {
         return { uploaded, skipped, failed };
     }
 
-    async _uploadSingle(file, targetName, token, onConflict) {
+    async _uploadThumbnail(file, targetName, token) {
+        const thumbnailBlob = await imageManager.processor.compressImage(file, {
+            maxWidth: 640,
+            maxHeight: 640,
+            quality: 0.78,
+            format: 'image/webp'
+        });
+        if (thumbnailBlob.type !== 'image/webp') {
+            throw new Error(`浏览器未生成 WebP（实际 ${thumbnailBlob.type || 'unknown'}）`);
+        }
+        const thumbnailName = `${targetName.replace(/\.[^.]+$/, '')}.webp`;
+        const thumbnailFile = new File([thumbnailBlob], thumbnailName, { type: 'image/webp' });
+        await this._uploadSingle(thumbnailFile, `thumbnails/${thumbnailName}`, token, () => true);
+        return `images/thumbnails/${encodeURIComponent(thumbnailName)}`;
+    }
+
+    async _uploadSingle(file, relativePath, token, onConflict) {
         const { OWNER, REPO, BRANCH, API_BASE, IMAGE_PATH } = CONFIG.GITHUB;
-        const encodedName = encodeURIComponent(targetName);
-        const url = `${API_BASE}/repos/${OWNER}/${REPO}/contents/${IMAGE_PATH}/${encodedName}`;
+        const encodedPath = relativePath
+            .split('/')
+            .map((part) => encodeURIComponent(part))
+            .join('/');
+        const url = `${API_BASE}/repos/${OWNER}/${REPO}/contents/${IMAGE_PATH}/${encodedPath}`;
         const headers = {
             Authorization: `token ${token}`,
             Accept: 'application/vnd.github.v3+json',
@@ -194,7 +220,7 @@ class ImageUploader {
         if (check.ok) {
             const existing = await check.json();
             existingSha = existing.sha || null;
-            if (!onConflict(targetName)) {
+            if (!onConflict(relativePath)) {
                 return { skipped: true };
             }
         } else if (check.status !== 404) {
@@ -203,7 +229,7 @@ class ImageUploader {
 
         const content = await fileToBase64(file);
         const body = {
-            message: `Upload ${targetName} via AI Gallery`,
+            message: `Upload ${relativePath} via AI Gallery`,
             content,
             branch: BRANCH
         };

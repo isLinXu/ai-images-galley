@@ -61,6 +61,16 @@ class PromptIntelligenceEngine {
             aspectRatio = '1:1'
         } = options;
 
+        if (!CONFIG.API.ENABLED) {
+            const localResult = this._localOptimize(prompt, options);
+            this._addToHistory({
+                original: prompt,
+                optimized: localResult.optimized_prompt,
+                timestamp: Date.now()
+            });
+            return localResult;
+        }
+
         try {
             this.isLoading = true;
             appLogger.info('Prompt智能优化开始:', prompt);
@@ -141,7 +151,8 @@ class PromptIntelligenceEngine {
                 .map((s) => s.id),
             parameter_suggestions: TARGET_MODELS[targetModel.toUpperCase()]?.parameters || {},
             tags: this._extractTags(optimized),
-            explanation: '使用本地规则优化（后端服务不可用）'
+            explanation: '使用本地规则优化（后端服务不可用）',
+            provider: 'local'
         };
     }
 
@@ -169,6 +180,7 @@ class PromptIntelligenceEngine {
      * 翻译Prompt
      */
     async translate(prompt, targetLanguage = 'en') {
+        if (!CONFIG.API.ENABLED) return prompt;
         try {
             const result = await promptAPI.translate(prompt, targetLanguage);
             return result.success ? result.data.translated : prompt;
@@ -182,6 +194,7 @@ class PromptIntelligenceEngine {
      * 分析Prompt质量
      */
     async analyzeQuality(prompt) {
+        if (!CONFIG.API.ENABLED) return this._localAnalyzeQuality(prompt);
         try {
             const result = await promptAPI.analyze(prompt);
             return result.success ? result.data : this._localAnalyzeQuality(prompt);

@@ -2,8 +2,9 @@ import { expect, test } from '@playwright/test';
 import { manifest, testImagePath } from './helpers.js';
 
 test('模块化版通过 GitHub Contents API 上传图片', async ({ page }) => {
-    const uploaded = new Map();
-    let putBody = null;
+    const uploadedImages = new Set();
+    const uploadedThumbnails = new Set();
+    const putBodies = new Map();
 
     await page.addInitScript(() => {
         sessionStorage.setItem('github_token', 'github_pat_test_token_1234567890');
@@ -23,7 +24,7 @@ test('模块化版通过 GitHub Contents API 上传图片', async ({ page }) => 
                     size: image.size,
                     sha: `sha-${image.name}`
                 })),
-                ...Array.from(uploaded.keys()).map((key) => ({
+                ...Array.from(uploadedImages).map((key) => ({
                     name: key,
                     type: 'file',
                     size: 1000,
@@ -38,7 +39,7 @@ test('模块化版通过 GitHub Contents API 上传图片', async ({ page }) => 
         }
 
         if (request.method() === 'GET' && name) {
-            if (uploaded.has(name)) {
+            if (uploadedImages.has(name) || uploadedThumbnails.has(name)) {
                 return route.fulfill({
                     status: 200,
                     contentType: 'application/json',
@@ -53,8 +54,12 @@ test('模块化版通过 GitHub Contents API 上传图片', async ({ page }) => 
         }
 
         if (request.method() === 'PUT' && name) {
-            putBody = JSON.parse(request.postData() || '{}');
-            uploaded.set(name, true);
+            putBodies.set(name, JSON.parse(request.postData() || '{}'));
+            if (name.startsWith('thumbnails/')) {
+                uploadedThumbnails.add(name);
+            } else {
+                uploadedImages.add(name);
+            }
             return route.fulfill({
                 status: 201,
                 contentType: 'application/json',
@@ -72,8 +77,16 @@ test('模块化版通过 GitHub Contents API 上传图片', async ({ page }) => 
     await chooser.setFiles(testImagePath());
 
     await expect(page.locator('#image-count')).toHaveText('1–20 / 共 47 张');
-    expect(putBody).not.toBeNull();
-    expect(putBody.branch).toBe('main');
-    expect(putBody.content.startsWith('/9j/')).toBe(true);
-    expect(putBody.content.length).toBeGreaterThan(1000);
+
+    const originalName = Array.from(uploadedImages)[0];
+    const thumbnailName = Array.from(uploadedThumbnails)[0];
+    expect(originalName).toMatch(/\.jpg$/);
+    expect(thumbnailName).toMatch(/^thumbnails\/.*\.webp$/);
+
+    const originalBody = putBodies.get(originalName);
+    const thumbnailBody = putBodies.get(thumbnailName);
+    expect(originalBody.branch).toBe('main');
+    expect(originalBody.content.startsWith('/9j/')).toBe(true);
+    expect(originalBody.content.length).toBeGreaterThan(1000);
+    expect(thumbnailBody.content.startsWith('UklGR')).toBe(true);
 });

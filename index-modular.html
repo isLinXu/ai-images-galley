@@ -125,6 +125,10 @@
                             上传图片
                         </button>
                         <input id="upload-input" type="file" accept="image/*" multiple class="hidden" />
+                        <button id="prompt-button" class="btn-secondary" aria-label="打开 Prompt 优化器" type="button">
+                            <i class="fas fa-magic mr-2" aria-hidden="true"></i>
+                            Prompt
+                        </button>
 
                         <!-- 视图切换 -->
                         <div
@@ -666,6 +670,157 @@
                         <div id="admin-security-content" class="space-y-4"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Prompt 优化模态框 -->
+        <div
+            id="prompt-modal"
+            class="modal hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="prompt-modal-title"
+            aria-describedby="prompt-modal-desc"
+        >
+            <div class="modal-content max-w-3xl max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white" id="prompt-modal-title">
+                            Prompt 优化器
+                        </h3>
+                        <p id="prompt-modal-desc" class="text-xs text-gray-500 dark:text-gray-400">
+                            无需后端时使用本地规则；配置后端 AI 后自动调用模型。
+                        </p>
+                    </div>
+                    <button
+                        class="modal-close text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                        aria-label="关闭"
+                        type="button"
+                    >
+                        <i class="fas fa-times text-xl" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <form id="prompt-form" class="p-4 space-y-4">
+                    <div>
+                        <label
+                            for="prompt-input"
+                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                        >
+                            原始 Prompt
+                        </label>
+                        <textarea
+                            id="prompt-input"
+                            rows="3"
+                            required
+                            placeholder="例如：花田里的女孩，午后阳光"
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                        ></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label
+                                for="prompt-style"
+                                class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                                >风格</label
+                            >
+                            <select id="prompt-style" class="filter-select w-full">
+                                <option value="">自动</option>
+                                <option value="photography">摄影</option>
+                                <option value="digital_art">数字艺术</option>
+                                <option value="oil_painting">油画</option>
+                                <option value="watercolor">水彩</option>
+                                <option value="anime">动漫</option>
+                                <option value="realistic">写实</option>
+                                <option value="minimalist">极简</option>
+                                <option value="cyberpunk">赛博朋克</option>
+                                <option value="vintage">复古</option>
+                                <option value="fantasy">奇幻</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label
+                                for="prompt-model"
+                                class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                                >目标模型</label
+                            >
+                            <select id="prompt-model" class="filter-select w-full">
+                                <option value="sdxl">Stable Diffusion XL</option>
+                                <option value="midjourney">Midjourney</option>
+                                <option value="dalle3">DALL-E 3</option>
+                                <option value="sd15">Stable Diffusion 1.5</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label
+                                for="prompt-language"
+                                class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                                >语言</label
+                            >
+                            <select id="prompt-language" class="filter-select w-full">
+                                <option value="zh">中文</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-4 text-sm text-gray-700 dark:text-gray-300">
+                        <label class="flex items-center gap-2">
+                            <input id="prompt-enhance" type="checkbox" checked />
+                            增强细节
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input id="prompt-negative" type="checkbox" checked />
+                            生成负面 Prompt
+                        </label>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <button id="prompt-submit" type="submit" class="btn-primary">
+                            <i class="fas fa-magic mr-2" aria-hidden="true"></i>
+                            优化 Prompt
+                        </button>
+                        <span id="prompt-status" class="text-xs text-gray-500 dark:text-gray-400" role="status"></span>
+                    </div>
+
+                    <div id="prompt-result" class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                    >优化结果</label
+                                >
+                                <button
+                                    id="copy-prompt"
+                                    type="button"
+                                    class="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                                >
+                                    <i class="fas fa-copy mr-1"></i>复制
+                                </button>
+                            </div>
+                            <pre
+                                id="prompt-output"
+                                class="whitespace-pre-wrap break-words text-sm bg-gray-50 dark:bg-gray-900/60 rounded-lg p-3 text-gray-800 dark:text-gray-200"
+                            >
+等待优化...</pre>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                                >负面 Prompt</label
+                            >
+                            <pre
+                                id="prompt-negative-output"
+                                class="whitespace-pre-wrap break-words text-sm bg-gray-50 dark:bg-gray-900/60 rounded-lg p-3 text-gray-800 dark:text-gray-200"
+                            >
+—</pre>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">标签</label>
+                            <div id="prompt-tags" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <p id="prompt-explanation" class="text-xs text-gray-500 dark:text-gray-400"></p>
+                    </div>
+                </form>
             </div>
         </div>
 

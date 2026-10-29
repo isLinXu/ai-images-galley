@@ -46,6 +46,8 @@ const requiredFiles = [
     'src/js/app.js',
     'src/js/config.js',
     'src/js/imageSource.js',
+    'src/js/uploader.js',
+    'src/js/aiResultStore.js',
     'src/js/galleryManager.js',
     'src/js/galleryRenderer.js',
     'vendor/tailwind.css',

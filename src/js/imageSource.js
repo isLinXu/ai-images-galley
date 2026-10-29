@@ -158,7 +158,9 @@ class ImageSource {
                 size: file.size,
                 width: 0,
                 height: 0,
-                thumbnailUrl: null,
+                // 约定：同名 WebP 缩略图位于 images/thumbnails/ 下；
+                // 文件不存在时由渲染器回退到原图。
+                thumbnailUrl: encodeImagePath(`thumbnails/${file.name.replace(/\.[^.]+$/, '')}.webp`),
                 timestamp: 0,
                 uploadTime: 0,
                 loadMethod: 'GitHub API'
