@@ -136,11 +136,13 @@ def test_multimodal_service_uses_model(tmp_path):
 
 
 def test_analysis_url_endpoint(monkeypatch):
-    async def fake_download(url):
-        return png_bytes()
+    from types import SimpleNamespace
+
+    async def fake_fetch(url, **kwargs):
+        return SimpleNamespace(content=png_bytes(), extension=".png", width=320, height=240)
 
     fake_llm = FakeLLM()
-    monkeypatch.setattr(analysis_api, "_download_image", fake_download)
+    monkeypatch.setattr(analysis_api, "fetch_public_image", fake_fetch)
     monkeypatch.setattr(analysis_api.ai_service, "llm", fake_llm)
 
     client = TestClient(app)
@@ -190,3 +192,50 @@ def test_analysis_endpoint_mock_when_no_key(tmp_path):
     assert data["tags"]
 
     client.delete(f"/api/v1/images/{image_id}")
+
+
+def test_multimodal_url_endpoints(monkeypatch):
+    from types import SimpleNamespace
+    from app.api import multimodal as multimodal_api
+
+    async def fake_fetch(url, **kwargs):
+        return SimpleNamespace(content=png_bytes(), extension=".png", width=320, height=240)
+
+    monkeypatch.setattr(multimodal_api, "fetch_public_image", fake_fetch)
+    monkeypatch.setattr(multimodal_api.multimodal_service, "llm", FakeLLM())
+
+    client = TestClient(app)
+    text_response = client.post(
+        "/api/v1/multimodal/image-to-text-url",
+        json={
+            "image_url": "https://islinxu.github.io/ai-images-galley/images/sample.png",
+            "task": "describe",
+            "language": "zh",
+        },
+    )
+    assert text_response.status_code == 200, text_response.text
+    text_data = text_response.json()["data"]
+    assert text_data["provider"] == "openai"
+    assert text_data["text"] == "一位站在花田中的女性。"
+
+    qa_response = client.post(
+        "/api/v1/multimodal/visual-qa-url",
+        json={
+            "image_url": "https://islinxu.github.io/ai-images-galley/images/sample.png",
+            "question": "图中有什么？",
+            "language": "zh",
+        },
+    )
+    assert qa_response.status_code == 200, qa_response.text
+    qa_data = qa_response.json()["data"]
+    assert qa_data["provider"] == "openai"
+    assert qa_data["answer"] == "画面中有一位人物。"
+
+
+def test_multimodal_url_rejects_untrusted_host():
+    client = TestClient(app)
+    response = client.post(
+        "/api/v1/multimodal/image-to-text-url",
+        json={"image_url": "https://evil.example.com/image.png", "task": "describe"},
+    )
+    assert response.status_code == 400

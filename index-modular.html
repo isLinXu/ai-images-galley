@@ -497,6 +497,62 @@
                                         >
                                         <div id="detected-objects" class="space-y-2"></div>
                                     </div>
+
+                                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-3">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                            >多模态文本</label
+                                        >
+                                        <div class="flex gap-2">
+                                            <select
+                                                id="multimodal-task"
+                                                class="filter-select flex-1"
+                                                aria-label="文本任务类型"
+                                            >
+                                                <option value="describe">详细描述</option>
+                                                <option value="caption">短标题</option>
+                                                <option value="story">短故事</option>
+                                                <option value="poem">短诗</option>
+                                            </select>
+                                            <button id="generate-text-btn" type="button" class="btn-primary text-sm">
+                                                <i class="fas fa-feather-alt mr-1" aria-hidden="true"></i>
+                                                生成
+                                            </button>
+                                        </div>
+                                        <p
+                                            id="multimodal-text"
+                                            class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
+                                        ></p>
+                                    </div>
+
+                                    <div class="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-3">
+                                        <label
+                                            for="visual-question"
+                                            class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                            >视觉问答</label
+                                        >
+                                        <div class="flex gap-2">
+                                            <input
+                                                id="visual-question"
+                                                type="text"
+                                                placeholder="这张图里有什么？"
+                                                class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                            />
+                                            <button id="ask-visual-btn" type="button" class="btn-primary text-sm">
+                                                <i class="fas fa-question mr-1" aria-hidden="true"></i>
+                                                提问
+                                            </button>
+                                        </div>
+                                        <p
+                                            id="multimodal-answer"
+                                            class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
+                                        ></p>
+                                    </div>
+
+                                    <p
+                                        id="multimodal-status"
+                                        class="text-xs text-gray-500 dark:text-gray-400"
+                                        role="status"
+                                    ></p>
                                 </div>
                             </div>
 

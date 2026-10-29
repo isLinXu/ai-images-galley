@@ -31,6 +31,42 @@ test('模块化版通过后端 AI 分析图片', async ({ page }) => {
                 body: JSON.stringify({ success: true, data: [] })
             });
         }
+        if (url.pathname.endsWith('/multimodal/image-to-text-url') && request.method() === 'POST') {
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                headers: cors,
+                body: JSON.stringify({
+                    success: true,
+                    data: {
+                        image_id: 'url',
+                        text: '花田中的人物故事。',
+                        text_en: 'A story in the flower field.',
+                        task: 'story',
+                        word_count: 8,
+                        confidence: 0.9,
+                        provider: 'openai'
+                    }
+                })
+            });
+        }
+        if (url.pathname.endsWith('/multimodal/visual-qa-url') && request.method() === 'POST') {
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                headers: cors,
+                body: JSON.stringify({
+                    success: true,
+                    data: {
+                        image_id: 'url',
+                        question: '图中有什么？',
+                        answer: '画面中有一位站在花田中的女性。',
+                        confidence: 0.92,
+                        provider: 'openai'
+                    }
+                })
+            });
+        }
         if (url.pathname.endsWith('/analysis/url') && request.method() === 'POST') {
             analysisRequest = JSON.parse(request.postData() || '{}');
             return route.fulfill({
@@ -79,6 +115,17 @@ test('模块化版通过后端 AI 分析图片', async ({ page }) => {
     expect(analysisRequest).not.toBeNull();
     expect(analysisRequest.image_url).toContain('/images/');
     expect(analysisRequest.language).toBe('zh');
+
+    // 多模态文本与视觉问答
+    await page.selectOption('#multimodal-task', 'story');
+    await page.locator('#generate-text-btn').click();
+    await expect(page.locator('#multimodal-text')).toContainText('花田中的人物故事');
+    await expect(page.locator('#multimodal-status')).toContainText('文本生成完成');
+
+    await page.fill('#visual-question', '图中有什么？');
+    await page.locator('#ask-visual-btn').click();
+    await expect(page.locator('#multimodal-answer')).toContainText('花田中的女性');
+    await expect(page.locator('#multimodal-status')).toContainText('问答完成');
 
     // 分析结果应写回卡片，并在刷新后从本地缓存恢复。
     await page.locator('#image-modal .modal-close').click();

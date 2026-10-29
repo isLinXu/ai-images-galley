@@ -544,6 +544,10 @@ export const promptAPI = {
  */
 export const multimodalAPI = {
     imageToText: (request) => apiClient.post('/multimodal/image-to-text', request),
+    imageToTextUrl: (request, options = {}) =>
+        apiClient.post('/multimodal/image-to-text-url', request, { timeout: 60000, ...options }),
+    visualQAUrl: (request, options = {}) =>
+        apiClient.post('/multimodal/visual-qa-url', request, { timeout: 60000, ...options }),
     textToImage: (request) => apiClient.post('/multimodal/text-to-image', request),
     visualQA: (request) => apiClient.post('/multimodal/visual-qa', request),
     styleTransfer: (request) =>

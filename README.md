@@ -8,16 +8,16 @@
 
 ## 能力状态
 
-| 能力           | `index.html`（稳定）             | `index-modular.html`（预览）   | `backend/`（实验）      |
-| -------------- | -------------------------------- | ------------------------------ | ----------------------- |
-| 图片浏览       | ✅ GitHub API + 本地清单         | ✅ GitHub API + 清单降级       | ✅ 文件系统 + 静态访问  |
-| 上传           | ✅ 提交到 GitHub 仓库            | ✅ GitHub Contents API         | ✅ multipart 上传       |
-| AI 分类/检测   | ✅ 浏览器端 MobileNet + COCO-SSD | ✅ 后端 AI 标签页（需配置）    | ✅ 真实模型 / mock 回退 |
-| 搜索/排序/分页 | ✅ 基础搜索/排序                 | ✅ 搜索/排序/分页/视图切换     | —                       |
-| 管理员         | ✅ GitHub Token + 仓库写权限校验 | ✅ 登录表单已接线              | ⚠️ 可选 `ADMIN_TOKEN`   |
-| PWA/离线       | ✅ manifest + Service Worker     | ✅ 同一套 PWA 资源             | —                       |
-| Prompt/多模态  | —                                | ✅ Prompt 优化 UI（本地/后端） | ✅ 条件真实 / mock      |
-| 测试           | ✅ Playwright E2E                | ✅ Playwright E2E              | ✅ 11 个 API/AI 测试    |
+| 能力           | `index.html`（稳定）             | `index-modular.html`（预览） | `backend/`（实验）      |
+| -------------- | -------------------------------- | ---------------------------- | ----------------------- |
+| 图片浏览       | ✅ GitHub API + 本地清单         | ✅ GitHub API + 清单降级     | ✅ 文件系统 + 静态访问  |
+| 上传           | ✅ 提交到 GitHub 仓库            | ✅ GitHub Contents API       | ✅ multipart 上传       |
+| AI 分类/检测   | ✅ 浏览器端 MobileNet + COCO-SSD | ✅ 后端 AI 标签页（需配置）  | ✅ 真实模型 / mock 回退 |
+| 搜索/排序/分页 | ✅ 基础搜索/排序                 | ✅ 搜索/排序/分页/视图切换   | —                       |
+| 管理员         | ✅ GitHub Token + 仓库写权限校验 | ✅ 登录表单已接线            | ⚠️ 可选 `ADMIN_TOKEN`   |
+| PWA/离线       | ✅ manifest + Service Worker     | ✅ 同一套 PWA 资源           | —                       |
+| Prompt/多模态  | —                                | ✅ Prompt + 多模态 UI        | ✅ 条件真实 / mock      |
+| 测试           | ✅ Playwright E2E                | ✅ Playwright E2E            | ✅ 11 个 API/AI 测试    |
 
 ## 快速开始
 
@@ -108,8 +108,9 @@ cd backend && pytest       # 后端 API 测试
 - 上传回归：通过 mock GitHub API 验证模块化版压缩为 JPEG、自动生成 WebP 缩略图、覆盖 sha、刷新为 47 张。
 - 缩略图：46 张 WebP 缩略图共约 0.88MB；卡片使用缩略图，详情使用原图。
 - AI 卡片：真实模型分析结果写入卡片标签并在 localStorage 缓存，刷新后仍可展示；mock 结果仅在详情页展示。
-- Service Worker：注册成功，缓存 `ai-gallery-static-v7` / `ai-gallery-images-v7`；断网刷新经典版仍能显示 46 张图片卡片。
-- 后端：`pytest` 11 个测试通过，覆盖图像 API、`ADMIN_TOKEN`、真实 AI 解析、Prompt、多模态、URL 分析和 mock 回退。
+- 多模态：图片详情支持生成描述/短标题/故事/诗歌，以及对图片提问（均使用 URL 接口，无需先上传到后端）。
+- Service Worker：注册成功，缓存 `ai-gallery-static-v8` / `ai-gallery-images-v8`；断网刷新经典版仍能显示 46 张图片卡片。
+- 后端：`pytest` 13 个测试通过，覆盖图像 API、`ADMIN_TOKEN`、真实 AI 解析、Prompt、多模态、URL 分析和 mock 回退。
 - 资源检查：manifest 图标/截图尺寸、图片清单、Service Worker 预缓存路径全部存在。
 
 ## 安全与隐私
@@ -130,11 +131,11 @@ cd backend && pytest       # 后端 API 测试
 
 ## 路线图
 
-1. 补充模块化版多模态 UI（图像转文本/视觉问答）。
-2. 后端接入数据库/对象存储，替换文件系统单机存储。
-3. 为卡片增加 `srcset`/CDN，并统一经典版上传的缩略图生成。
-4. 接入真实图像编辑/风格迁移模型，替换剩余 mock。
-5. 增加可观测性、限流、依赖审计和更多 E2E 场景。
+1. 后端接入数据库/对象存储，替换文件系统单机存储。
+2. 为卡片增加 `srcset`/CDN，并统一经典版上传的缩略图生成。
+3. 接入真实图像编辑/风格迁移模型，替换剩余 mock。
+4. 增加可观测性、限流、依赖审计和更多 E2E 场景。
+5. 将 AI 分析结果从浏览器缓存迁移到服务端账户体系。
 
 ## 许可证
 

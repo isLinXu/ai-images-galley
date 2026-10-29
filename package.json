@@ -1,6 +1,6 @@
 {
   "name": "ai-images-galley",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "基于 TensorFlow.js 与 GitHub 存储的 AI 智能相册",
   "type": "module",

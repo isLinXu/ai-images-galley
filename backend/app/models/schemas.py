@@ -208,6 +208,15 @@ class ImageToTextRequest(BaseModel):
     style: Optional[str] = None
 
 
+class ImageToTextUrlRequest(BaseModel):
+    """通过公开图片 URL 做图像转文本"""
+    image_url: str = Field(..., min_length=8, max_length=2000)
+    task: str = "describe"
+    language: str = "zh"
+    max_length: int = Field(default=500, ge=50, le=2000)
+    style: Optional[str] = None
+
+
 class ImageToTextResponse(BaseModel):
     """图像转文本响应"""
     image_id: str
@@ -246,6 +255,14 @@ class VisualQARequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=500)
     language: str = "zh"
     detail_level: str = "auto"  # low, high, auto
+
+
+class VisualQAUrlRequest(BaseModel):
+    """通过公开图片 URL 做视觉问答"""
+    image_url: str = Field(..., min_length=8, max_length=2000)
+    question: str = Field(..., min_length=1, max_length=500)
+    language: str = "zh"
+    detail_level: str = "auto"
 
 
 class VisualQAResponse(BaseModel):

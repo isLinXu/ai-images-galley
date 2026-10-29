@@ -11,7 +11,7 @@
 > - 风格迁移 / 图像编辑：⚠️ 仍为 mock 占位，尚未接入真实图像编辑模型
 > - URL 图像分析：✅ 支持，带主机白名单与大小/尺寸校验
 > - 数据库 / 多用户 / 任务队列：❌ 尚未实现
-> - 自动化测试：✅ 11 个 pytest 测试
+> - 自动化测试：✅ 13 个 pytest 测试
 
 ## 快速开始
 
@@ -56,6 +56,8 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `POST /api/v1/analysis/classify|detect|caption|colors|tags`
 - `POST /api/v1/prompts/optimize|translate|generate-negative|analyze`
 - `POST /api/v1/multimodal/image-to-text|text-to-image|visual-qa|style-transfer|image-edit`
+- `POST /api/v1/multimodal/image-to-text-url` — 公开 URL 图像转文本
+- `POST /api/v1/multimodal/visual-qa-url` — 公开 URL 视觉问答
 
 配置 `AI_PROVIDER=auto`（默认）与 `OPENAI_API_KEY` 后，图像分析、Prompt 优化/翻译、
 图像转文本、视觉问答、文生图使用真实模型。没有 Key 或模型调用失败时自动回退 mock；

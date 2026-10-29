@@ -8,7 +8,7 @@
 - ✅ 管理员登录后通过 GitHub Contents API 持久化上传（JPEG + 自动 WebP 缩略图）
 - ✅ AI 分析标签页：调用后端视觉模型，真实结果写入卡片并缓存到 localStorage（mock 只展示不落卡片）
 - ✅ Prompt 优化 UI：无后端时本地规则，有后端时调用真实模型
-- ⏸ 多模态 UI（图像转文本/视觉问答）尚未接入
+- ✅ 多模态 UI：生成描述/短标题/故事/诗歌、视觉问答（需后端 API）
 - ⏸ 默认不请求后端；未配置时 AI 标签页只显示配置提示
 
 > 生产使用请优先选择 `index.html`。模块化版用于验证架构和逐步迁移。
@@ -58,6 +58,7 @@ src/js/
 7. AI：详情页标签页 → `analysisAPI.analyzeUrl()` → 后端视觉模型（或 mock）→ 更新标签/描述/检测对象 → 写入卡片与本地缓存
 8. Prompt：`promptEngine.optimize()` → 后端模型或本地规则 → 展示优化结果/负面 Prompt/标签
 9. 上传缩略图：浏览器生成 640px WebP → `images/thumbnails/` → 卡片优先使用缩略图
+10. 多模态：`multimodalAPI.imageToTextUrl/visualQAUrl()` → 后端临时下载图片 → 生成文本/回答 → 删除临时文件
 
 ## 后端联调
 
@@ -89,7 +90,6 @@ URL 分析只允许配置中的 `ALLOWED_IMAGE_HOSTS`；如果前端部署在其
 
 ## 已知缺口
 
-- 多模态 UI（图像转文本/视觉问答）尚未接入。
 - `imageWorker.js` 未接入图片管线（缩略图使用主线程 Canvas）。
 - 后端风格迁移/图像编辑仍是 mock；图像分析/Prompt/多模态在配置 Key 后为真实模型。
 - 经典版上传或手动新增图片仍不会自动生成 WebP 缩略图，需要运行 `npm run generate:thumbnails`。

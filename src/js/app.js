@@ -16,7 +16,7 @@ import adminManager from './adminManager.js';
 import aiResultStore from './aiResultStore.js';
 import imageUploader from './uploader.js';
 import appLogger from './logger.js';
-import { apiClient, analysisAPI } from './apiClient.js';
+import { analysisAPI, apiClient, multimodalAPI } from './apiClient.js';
 import promptEngine from './promptEngine.js';
 import multimodalEngine from './multimodalEngine.js'; // eslint-disable-line no-unused-vars
 
@@ -1149,6 +1149,16 @@ class App {
             });
         }
 
+        const generateTextButton = document.querySelector('#generate-text-btn');
+        if (generateTextButton) {
+            generateTextButton.addEventListener('click', () => this._generateMultimodalText());
+        }
+
+        const askVisualButton = document.querySelector('#ask-visual-btn');
+        if (askVisualButton) {
+            askVisualButton.addEventListener('click', () => this._askVisualQuestion());
+        }
+
         // 模态框关闭按钮
         document.querySelectorAll('.modal-close').forEach((button) => {
             button.addEventListener('click', () => uiManager.modalManager.hideAll());
@@ -1421,8 +1431,100 @@ class App {
                     : 'AI 分析需要后端 API：请先启动 backend 并设置 localStorage.api_base_url 后刷新。'
             );
         }
+        setText('#multimodal-text', '');
+        setText('#multimodal-answer', '');
+        setText(
+            '#multimodal-status',
+            CONFIG.API.ENABLED ? '可生成描述/故事/诗歌，或对图片提问。' : '多模态功能需要后端 API；配置后刷新页面。'
+        );
 
         uiManager.modalManager.show('image-modal');
+    }
+
+    /**
+     * 生成多模态文本（描述/标题/故事/诗歌）
+     * @private
+     */
+    async _generateMultimodalText() {
+        const image = this.currentModalImage;
+        const status = document.querySelector('#multimodal-status');
+        const output = document.querySelector('#multimodal-text');
+        const button = document.querySelector('#generate-text-btn');
+        const task = document.querySelector('#multimodal-task')?.value || 'describe';
+
+        if (!image) return;
+        if (!CONFIG.API.ENABLED) {
+            if (status) status.textContent = '多模态功能需要后端 API；配置后刷新页面。';
+            return;
+        }
+
+        if (button) button.disabled = true;
+        if (status) status.textContent = '正在生成文本...';
+        if (output) output.textContent = '';
+        try {
+            const result = await multimodalAPI.imageToTextUrl({
+                image_url: new URL(image.url, location.href).href,
+                task,
+                language: 'zh',
+                max_length: 500
+            });
+            if (!result?.success || !result.data) {
+                throw new Error(result?.message || '生成失败');
+            }
+            if (output) output.textContent = result.data.text || '暂无文本';
+            if (status) {
+                status.textContent = `文本生成完成（${result.data.provider === 'openai' ? '真实模型' : '演示数据'}）`;
+            }
+        } catch (error) {
+            if (status) status.textContent = `生成失败：${error.message}`;
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    /**
+     * 对图片进行视觉问答
+     * @private
+     */
+    async _askVisualQuestion() {
+        const image = this.currentModalImage;
+        const status = document.querySelector('#multimodal-status');
+        const answer = document.querySelector('#multimodal-answer');
+        const button = document.querySelector('#ask-visual-btn');
+        const question = document.querySelector('#visual-question')?.value.trim() || '';
+
+        if (!image) return;
+        if (!question) {
+            if (status) status.textContent = '请输入问题';
+            return;
+        }
+        if (!CONFIG.API.ENABLED) {
+            if (status) status.textContent = '多模态功能需要后端 API；配置后刷新页面。';
+            return;
+        }
+
+        if (button) button.disabled = true;
+        if (status) status.textContent = '正在思考...';
+        if (answer) answer.textContent = '';
+        try {
+            const result = await multimodalAPI.visualQAUrl({
+                image_url: new URL(image.url, location.href).href,
+                question,
+                language: 'zh',
+                detail_level: 'auto'
+            });
+            if (!result?.success || !result.data) {
+                throw new Error(result?.message || '问答失败');
+            }
+            if (answer) answer.textContent = result.data.answer || '暂无回答';
+            if (status) {
+                status.textContent = `问答完成（${result.data.provider === 'openai' ? '真实模型' : '演示数据'}）`;
+            }
+        } catch (error) {
+            if (status) status.textContent = `问答失败：${error.message}`;
+        } finally {
+            if (button) button.disabled = false;
+        }
     }
 
     /**

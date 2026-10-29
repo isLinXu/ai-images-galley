@@ -6,7 +6,7 @@
  * 因此既支持站点根路径部署，也支持 GitHub Pages 的 /<repo>/ 子路径部署。
  */
 
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const STATIC_CACHE = `ai-gallery-static-${CACHE_VERSION}`;
 const IMAGE_CACHE = `ai-gallery-images-${CACHE_VERSION}`;
 const API_CACHE = `ai-gallery-api-${CACHE_VERSION}`;
